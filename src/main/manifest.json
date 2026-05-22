@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "ScamShield AI Scout",
+  "version": "1.0.0",
+  "description": "Real-time client-side Layer 1 domain scouter integrated with the ScamShield AI Render backend engine.",
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "storage"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ]
+}
