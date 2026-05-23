@@ -46,10 +46,22 @@ public class GeminiIntegrationService {
         "secure", "login", "verify", "update", "support", "account", "otp", "claim"
     );
 
+    private static final List<String> APPLICATION_SCAM_BAIT_TERMS = List.of(
+        "bantuan", "percuma", "free", "claim", "laptop", "phone",
+        "subsidi", "sumbangan", "rahmah", "emadani", "hadiah"
+    );
+
+    private static final List<String> PERSONAL_CONTACT_TERMS = List.of(
+        "nama penuh", "nombor telegram", "telegram", "whatsapp",
+        "jantina", "no telefon", "nombor telefon", "phone number",
+        "kad pengenalan", "identity card"
+    );
+
     private static final List<String> SUSPICIOUS_COPY_TYPOS = List.of(
         "securty", "securrity", "verfy", "verifcation", "verificaton",
         "accout", "acount", "passw0rd", "pasword", "logln", "l0gin",
-        "immediatly", "suspention", "restricton", "unathorized"
+        "immediatly", "suspention", "restricton", "unathorized",
+        "aplly", "aply", "app1y", "appy now"
     );
 
     private static final List<String> HIGH_RISK_TLDS = List.of(
@@ -91,8 +103,8 @@ public class GeminiIntegrationService {
             String systemInstructionPrompt = 
                 "You are a cybersecurity expert specializing in phishing and scam detection. " +
                 "Analyze the following domain and page content for signs of phishing, impersonation, or scam. " +
-                "Consider: domain spoofing (similar to legitimate banks), typosquatting, misspelled brand names, typo-filled credential requests, fake login forms, suspicious URLs, urgency tactics, requests for credentials. " +
-                "If the domain or page text appears to imitate a bank with small spelling changes or suspicious typos, mark it as SCAM. " +
+                "Consider: domain spoofing (similar to legitimate banks), typosquatting, misspelled brand names, typo-filled credential requests, fake login forms, suspicious URLs, urgency tactics, requests for credentials, free-aid or free-device bait, Telegram/WhatsApp contact collection, and application pages with obvious typos such as aplly. " +
+                "If the domain or page text appears to imitate a bank with small spelling changes, or offers free aid/devices while collecting contact details through typo-filled forms, mark it as SCAM. " +
                 "Respond with ONLY a single word: SCAM or SAFE. No punctuation, no explanation, no extra text.";
 
             String analyticalPayload = String.format(
@@ -260,6 +272,12 @@ public class GeminiIntegrationService {
         boolean hasSuspiciousCopyTypo = SUSPICIOUS_COPY_TYPOS.stream()
                 .anyMatch(normalizedPageText::contains);
 
+        boolean hasApplicationScamBait = APPLICATION_SCAM_BAIT_TERMS.stream()
+                .anyMatch(term -> normalizedDomain.contains(term) || normalizedPageText.contains(term));
+
+        boolean collectsPersonalContact = PERSONAL_CONTACT_TERMS.stream()
+                .anyMatch(normalizedPageText::contains);
+
         if (targetsMalaysianBank && hasSuspiciousToken) {
             return 100;
         }
@@ -270,6 +288,14 @@ public class GeminiIntegrationService {
 
         if (hasSuspiciousCopyTypo && asksForSensitiveInfo) {
             return 75;
+        }
+
+        if (hasApplicationScamBait && collectsPersonalContact && hasSuspiciousCopyTypo) {
+            return 92;
+        }
+
+        if (hasApplicationScamBait && collectsPersonalContact) {
+            return 85;
         }
 
         if (targetsMalaysianBank && establishedMalaysianTld) {

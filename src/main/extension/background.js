@@ -68,6 +68,33 @@ const SUSPICIOUS_PATTERNS = [
     "claim"
 ];
 
+const APPLICATION_SCAM_BAIT_TERMS = [
+    "bantuan",
+    "percuma",
+    "free",
+    "claim",
+    "laptop",
+    "phone",
+    "subsidi",
+    "sumbangan",
+    "rahmah",
+    "emadani",
+    "hadiah"
+];
+
+const PERSONAL_CONTACT_TERMS = [
+    "nama penuh",
+    "nombor telegram",
+    "telegram",
+    "whatsapp",
+    "jantina",
+    "no telefon",
+    "nombor telefon",
+    "phone number",
+    "kad pengenalan",
+    "identity card"
+];
+
 const SUSPICIOUS_COPY_TYPOS = [
     "securty",
     "securrity",
@@ -83,7 +110,11 @@ const SUSPICIOUS_COPY_TYPOS = [
     "immediatly",
     "suspention",
     "restricton",
-    "unathorized"
+    "unathorized",
+    "aplly",
+    "aply",
+    "app1y",
+    "appy now"
 ];
 
 const HIGH_RISK_TLDS = [".click", ".online", ".site", ".top", ".xyz", ".icu", ".test"];
@@ -283,6 +314,10 @@ function evaluateWithLocalRules(incomingMessage) {
         pageText.includes("kata laluan") ||
         pageText.includes("verify your account");
     const hasSuspiciousCopyTypo = SUSPICIOUS_COPY_TYPOS.some(pattern => pageText.includes(pattern));
+    const hasApplicationScamBait = APPLICATION_SCAM_BAIT_TERMS.some(term =>
+        normalizedUrl.includes(term) || pageText.includes(term)
+    );
+    const collectsPersonalContact = PERSONAL_CONTACT_TERMS.some(term => pageText.includes(term));
 
     if (targetsBank && matchedPattern) {
         return normalizeVerdictPayload({
@@ -294,6 +329,32 @@ function evaluateWithLocalRules(incomingMessage) {
                 `Matched suspicious token: ${matchedPattern}`
             ],
             evidenceSources: "LOCAL_BANK_MIMIC_RULES"
+        }, targetUrl, { scanMode: "LOCAL_RULES", backendAvailable: false });
+    }
+
+    if (hasApplicationScamBait && collectsPersonalContact && hasSuspiciousCopyTypo) {
+        return normalizeVerdictPayload({
+            status: "BLOCK",
+            riskScore: 92,
+            confidence: 0.9,
+            reasons: [
+                "This looks like a free-aid or free-device application scam.",
+                "The page combines typo-filled application text with Telegram or personal-detail collection."
+            ],
+            evidenceSources: "LOCAL_APPLICATION_SCAM_RULES"
+        }, targetUrl, { scanMode: "LOCAL_RULES", backendAvailable: false });
+    }
+
+    if (hasApplicationScamBait && collectsPersonalContact) {
+        return normalizeVerdictPayload({
+            status: "BLOCK",
+            riskScore: 85,
+            confidence: 0.84,
+            reasons: [
+                "This page offers free aid or devices while collecting contact details on an untrusted domain.",
+                "Telegram-based application flows are a common scam pattern."
+            ],
+            evidenceSources: "LOCAL_APPLICATION_SCAM_RULES"
         }, targetUrl, { scanMode: "LOCAL_RULES", backendAvailable: false });
     }
 
