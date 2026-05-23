@@ -6,3 +6,6 @@
 .vscode/
 .idea/
 *.class
+gemini_javap.txt
+load_service.jsh
+verbose_class_load.txt

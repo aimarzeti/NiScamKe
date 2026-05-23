@@ -24,10 +24,7 @@
       margin: 0;
       font-family: "Trebuchet MS", "Aptos", sans-serif;
       color: var(--ink);
-      background:
-        radial-gradient(circle at 8% 8%, rgba(255, 205, 107, 0.38), transparent 32%),
-        radial-gradient(circle at 86% 16%, rgba(17, 85, 204, 0.16), transparent 30%),
-        linear-gradient(135deg, #f9fcff 0%, var(--bg) 100%);
+      background: linear-gradient(135deg, #f9fcff 0%, var(--bg) 100%);
     }
 
     .wrap {
@@ -81,7 +78,7 @@
       margin: 0;
       font-size: clamp(38px, 7vw, 76px);
       line-height: 0.92;
-      letter-spacing: -0.07em;
+      letter-spacing: 0;
     }
 
     .lede {
@@ -114,7 +111,7 @@
       display: block;
       font-size: 42px;
       line-height: 1;
-      letter-spacing: -0.04em;
+      letter-spacing: 0;
     }
 
     .actions {
@@ -169,7 +166,7 @@
     .metric .value {
       font-size: 38px;
       font-weight: 900;
-      letter-spacing: -0.06em;
+      letter-spacing: 0;
     }
 
     .safe { color: var(--safe); }
@@ -192,7 +189,7 @@
     h2 {
       margin: 0;
       font-size: 24px;
-      letter-spacing: -0.03em;
+      letter-spacing: 0;
     }
 
     .muted {
@@ -313,6 +310,8 @@
         </div>
         <p id="healthLine">Backend is ready on localhost:8080.</p>
         <div class="actions">
+          <a class="btn" href="/demo.html">Browser Demo</a>
+          <a class="btn secondary" href="/partner-demo.html">Partner API</a>
           <a class="btn" href="/review.html">Review Queue</a>
           <a class="btn secondary" href="/api/v1/health">API Health</a>
         </div>

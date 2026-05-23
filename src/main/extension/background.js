@@ -5,7 +5,7 @@
 
 const API_BASE_URL = "http://localhost:8080";
 const LIVE_BACKEND_ENABLED = true;
-const LIVE_SCAMSHIELD_SCAN_ROUTE = `${API_BASE_URL}/api/v1/scan-url`;
+const LIVE_SCAN_ROUTE = `${API_BASE_URL}/api/v1/scan-url`;
 const BADGE_COLORS = {
     ALLOW: "#11845b",
     WARN: "#b86b00",
@@ -641,7 +641,7 @@ function evaluateViaBackend(incomingMessage) {
         clientTimestamp: new Date().toISOString()
     };
 
-    return fetch(LIVE_SCAMSHIELD_SCAN_ROUTE, {
+    return fetch(LIVE_SCAN_ROUTE, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(structuredBackendPayload)

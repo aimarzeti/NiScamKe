@@ -283,7 +283,7 @@
         <label for="pageText">Message or page context</label>
         <textarea id="pageText">Verify your Maybank account password and OTP immediately.</textarea>
 
-        <button type="button" id="scanButton">Open external link</button>
+        <button type="button" id="scanButton">Check before opening</button>
       </div>
 
       <div class="phone">
@@ -306,6 +306,8 @@
             <div class="meta">
               <div><span>Risk</span><strong id="riskValue">-</strong></div>
               <div><span>Threat</span><strong id="threatValue">-</strong></div>
+              <div><span>Confidence</span><strong id="confidenceValue">-</strong></div>
+              <div><span>Decision ID</span><strong id="decisionIdValue">-</strong></div>
             </div>
 
             <button type="button" class="safe-button" id="primaryAction">Back to safety</button>
@@ -328,6 +330,11 @@
   <script>
     const demoApiKey = "demo-partner-key";
 
+    function formatConfidence(value) {
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? `${Math.round(numeric * 100)}%` : "-";
+    }
+
     function renderResponse(data) {
       const resultBox = document.getElementById("resultBox");
       const decisionLabel = document.getElementById("decisionLabel");
@@ -345,6 +352,8 @@
       document.getElementById("riskValue").textContent = data.riskScore == null ? "-" : `${data.riskScore}/100`;
       document.getElementById("partnerValue").textContent = data.partnerId || "-";
       document.getElementById("threatValue").textContent = data.threatType || "-";
+      document.getElementById("confidenceValue").textContent = formatConfidence(data.confidence);
+      document.getElementById("decisionIdValue").textContent = data.decisionId || "-";
       document.getElementById("rawJson").textContent = JSON.stringify(data, null, 2);
     }
 
@@ -371,6 +380,10 @@
 
       if (data.decision === "UNAUTHORIZED") {
         return "The partner app could not verify its API key.";
+      }
+
+      if (data.decision === "ERROR") {
+        return data.userMessage || "Could not reach the partner API. Make sure the backend is running.";
       }
 
       return "DemoPay found warning signs. Review the link carefully before opening it.";
@@ -428,7 +441,7 @@
         });
       } finally {
         scanButton.disabled = false;
-        scanButton.textContent = "Open external link";
+        scanButton.textContent = "Check before opening";
       }
     }
 
