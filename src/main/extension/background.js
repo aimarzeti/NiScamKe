@@ -84,6 +84,18 @@ const APPLICATION_SCAM_BAIT_TERMS = [
     "hadiah"
 ];
 
+const SUSPICIOUS_APPLICATION_HOST_TERMS = [
+    "apy",
+    "ap1",
+    "app1y",
+    "aplly",
+    "aply",
+    "apply",
+    "mohon",
+    "daftar",
+    "claim"
+];
+
 const PERSONAL_CONTACT_TERMS = [
     "nama penuh",
     "nombor telegram",
@@ -335,7 +347,11 @@ function evaluateWithLocalRules(incomingMessage) {
     const hasApplicationScamBait = APPLICATION_SCAM_BAIT_TERMS.some(term =>
         normalizedUrl.includes(term) || pageText.includes(term)
     );
+    const applicationBaitCount = APPLICATION_SCAM_BAIT_TERMS.filter(term =>
+        normalizedUrl.includes(term) || pageText.includes(term)
+    ).length;
     const collectsPersonalContact = PERSONAL_CONTACT_TERMS.some(term => pageText.includes(term));
+    const hasSuspiciousApplicationHost = SUSPICIOUS_APPLICATION_HOST_TERMS.some(term => host.includes(term));
 
     if (targetsBank && matchedPattern) {
         return normalizeVerdictPayload({
@@ -363,14 +379,40 @@ function evaluateWithLocalRules(incomingMessage) {
         }, targetUrl, { scanMode: "LOCAL_RULES", backendAvailable: false });
     }
 
+    if (applicationBaitCount >= 2 && hasSuspiciousApplicationHost) {
+        return normalizeVerdictPayload({
+            status: "BLOCK",
+            riskScore: 90,
+            confidence: 0.88,
+            reasons: [
+                "Why is this flagged: The untrusted domain combines public-aid or free-device bait with suspicious application wording or typo-like host text.",
+                "Modus operandi: The page appears to lure users into a fake application flow before collecting contact details, identity information, OTPs, or payment details."
+            ],
+            evidenceSources: "LOCAL_APPLICATION_SCAM_RULES"
+        }, targetUrl, { scanMode: "LOCAL_RULES", backendAvailable: false });
+    }
+
+    if (applicationBaitCount >= 3 && !establishedMalaysianTld) {
+        return normalizeVerdictPayload({
+            status: "BLOCK",
+            riskScore: 85,
+            confidence: 0.84,
+            reasons: [
+                "Why is this flagged: The URL uses multiple free-aid or free-device bait terms on an untrusted non-Malaysian domain.",
+                "Modus operandi: Scammers use this pattern to make a fake giveaway or assistance application look urgent and legitimate."
+            ],
+            evidenceSources: "LOCAL_APPLICATION_SCAM_RULES"
+        }, targetUrl, { scanMode: "LOCAL_RULES", backendAvailable: false });
+    }
+
     if (hasApplicationScamBait && collectsPersonalContact) {
         return normalizeVerdictPayload({
             status: "BLOCK",
             riskScore: 85,
             confidence: 0.84,
             reasons: [
-                "This page offers free aid or devices while collecting contact details on an untrusted domain.",
-                "Telegram-based application flows are a common scam pattern."
+                "Why is this flagged: This page offers free aid or devices while collecting contact details on an untrusted domain.",
+                "Modus operandi: Telegram or messaging-based application flows are often used to move victims away from safer official channels."
             ],
             evidenceSources: "LOCAL_APPLICATION_SCAM_RULES"
         }, targetUrl, { scanMode: "LOCAL_RULES", backendAvailable: false });
@@ -514,15 +556,12 @@ chrome.runtime.onMessage.addListener((incomingMessage, sender, dispatchVerdictCa
         .catch(error => {
             console.error("[Ni Scam Ke] Scan pipeline error:", error);
 
-            const safeFallbackVerdict = normalizeVerdictPayload({
-                status: "WARN",
-                riskScore: 50,
-                confidence: 0.55,
-                reasons: ["Protection status is uncertain. Avoid entering passwords or OTPs here."],
-                evidenceSources: "FAILSAFE"
-            }, incomingMessage.currentUrl, { scanMode: "FAILSAFE", backendAvailable: false });
+            const safeFallbackVerdict = evaluateWithLocalRules(incomingMessage);
+            safeFallbackVerdict.backendAvailable = false;
+            safeFallbackVerdict.scanMode = "LOCAL_RULES";
 
             persistLastScan(safeFallbackVerdict);
+            pushBrowserNotification(safeFallbackVerdict);
             dispatchVerdictCallback(safeFallbackVerdict);
         });
 

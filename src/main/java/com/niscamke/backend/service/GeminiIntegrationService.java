@@ -52,6 +52,10 @@ public class GeminiIntegrationService {
         "subsidi", "sumbangan", "rahmah", "emadani", "hadiah"
     );
 
+    private static final List<String> SUSPICIOUS_APPLICATION_HOST_TERMS = List.of(
+        "apy", "ap1", "app1y", "aplly", "aply", "apply", "mohon", "daftar", "claim"
+    );
+
     private static final List<String> PERSONAL_CONTACT_TERMS = List.of(
         "nama penuh", "nombor telegram", "telegram", "whatsapp",
         "jantina", "no telefon", "nombor telefon", "phone number",
@@ -100,7 +104,7 @@ public class GeminiIntegrationService {
 
         if (apiKey == null || apiKey.isBlank()) {
             System.err.println("[ScamShield Warning] Missing Gemini API key parameter config.");
-            return buildRuleBasedAnalysis(structuralRisk);
+            return buildRuleBasedAnalysis(structuralRisk, normalizedDomain, pageText);
         }
 
         try {
@@ -150,7 +154,7 @@ public class GeminiIntegrationService {
             System.err.println("[ScamShield System Fault] Gemini API Connection Error: " + e.getMessage());
         }
 
-        return buildRuleBasedAnalysis(structuralRisk);
+        return buildRuleBasedAnalysis(structuralRisk, normalizedDomain, pageText);
     }
     /**
      * Robust Gemini response parser with edge case handling.
@@ -262,7 +266,21 @@ public class GeminiIntegrationService {
         }
     }
 
-    private GeminiAnalysis buildRuleBasedAnalysis(int structuralRisk) {
+    private GeminiAnalysis buildRuleBasedAnalysis(int structuralRisk, String normalizedDomain, String pageText) {
+        String normalizedPageText = pageText == null ? "" : pageText.toLowerCase(Locale.ROOT);
+        long applicationBaitCount = APPLICATION_SCAM_BAIT_TERMS.stream()
+                .filter(term -> normalizedDomain.contains(term) || normalizedPageText.contains(term))
+                .count();
+        boolean hasSuspiciousApplicationHost = SUSPICIOUS_APPLICATION_HOST_TERMS.stream()
+                .anyMatch(term -> normalizedDomain.contains(term));
+
+        if (applicationBaitCount >= 2 && hasSuspiciousApplicationHost && structuralRisk >= 80) {
+            return new GeminiAnalysis(true, List.of(
+                    "Why blocked: The untrusted domain combines public-aid or free-device bait with suspicious application wording or typo-like host text.",
+                    "Modus operandi: The page appears to lure users into a fake application flow before collecting contact details, identity information, OTPs, or payment details."
+            ));
+        }
+
         if (structuralRisk >= 80) {
             return new GeminiAnalysis(true, List.of(
                     "Why blocked: The site combines high-risk scam signals such as suspicious domain wording, free-aid or device bait, typo-heavy text, or personal-contact collection.",
@@ -376,9 +394,15 @@ public class GeminiIntegrationService {
 
         boolean hasApplicationScamBait = APPLICATION_SCAM_BAIT_TERMS.stream()
                 .anyMatch(term -> normalizedDomain.contains(term) || normalizedPageText.contains(term));
+        long applicationBaitCount = APPLICATION_SCAM_BAIT_TERMS.stream()
+                .filter(term -> normalizedDomain.contains(term) || normalizedPageText.contains(term))
+                .count();
 
         boolean collectsPersonalContact = PERSONAL_CONTACT_TERMS.stream()
                 .anyMatch(normalizedPageText::contains);
+
+        boolean hasSuspiciousApplicationHost = SUSPICIOUS_APPLICATION_HOST_TERMS.stream()
+                .anyMatch(normalizedDomain::contains);
 
         if (targetsMalaysianBank && hasSuspiciousToken) {
             return 100;
@@ -394,6 +418,14 @@ public class GeminiIntegrationService {
 
         if (hasApplicationScamBait && collectsPersonalContact && hasSuspiciousCopyTypo) {
             return 92;
+        }
+
+        if (applicationBaitCount >= 2 && hasSuspiciousApplicationHost) {
+            return 90;
+        }
+
+        if (applicationBaitCount >= 3 && !establishedMalaysianTld) {
+            return 85;
         }
 
         if (hasApplicationScamBait && collectsPersonalContact) {

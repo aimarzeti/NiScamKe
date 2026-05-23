@@ -62,7 +62,7 @@ function formatMode(scan) {
     }
 
     if (scan.backendAvailable === false) {
-        return UI_COPY.localFallback;
+        return scan.scanMode === "LOCAL_RULES" ? "Local scam rules" : UI_COPY.localFallback;
     }
 
     return scan.scanMode === "LIVE_BACKEND" ? UI_COPY.liveBackend : scan.scanMode || UI_COPY.liveBackend;

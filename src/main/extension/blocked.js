@@ -33,7 +33,16 @@ function formatEvidenceSources(evidenceSources) {
         COMMUNITY_DB: "community database",
         INPUT_VALIDATION: "input validation",
         USER_BYPASS: "user bypass",
-        FAILSAFE: "failsafe"
+        FAILSAFE: "failsafe",
+        LOCAL_APPLICATION_SCAM_RULES: "local application scam rules",
+        LOCAL_BANK_MIMIC_RULES: "local banking mimic rules",
+        LOCAL_COPY_ANALYSIS: "local typo and copy analysis",
+        LOCAL_INPUT_VALIDATION: "local input validation",
+        LOCAL_REVIEW_REQUIRED: "local review rules",
+        LOCAL_RISK_RULES: "local risk rules",
+        LOCAL_RULE_ENGINE: "local rule engine",
+        LOCAL_TRUST_LIST: "local trusted list",
+        LOCAL_TYPOSQUATTING_RULES: "local typosquatting rules"
     };
 
     return String(evidenceSources || "AI_MODEL")
