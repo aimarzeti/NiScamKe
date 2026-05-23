@@ -1,3 +1,7 @@
+// LinkVerificationController.java
+// for handling link verification requests from the frontend
+
+// use package com.niscamke.backend.controller for organizing controllers in the backend
 package com.niscamke.backend.controller;
 
 import org.springframework.http.ResponseEntity;
@@ -22,12 +26,14 @@ public class LinkVerificationController {
 
     private final VerificationService verificationService;
 
-    @PostMapping("/verify-link")
+    // endpoint for verifying links, accepts a POST request with the current URL and page text, returns a response with the verification status and reason
+    @PostMapping("/verify-link") // endpoint for verifying links
     public ResponseEntity<VerificationResponse> verifyLink(@RequestBody VerificationRequest request) {
         VerificationResponse response = verificationService.checkLink(request);
         return ResponseEntity.ok(response);
     }
 
+    // for calling the verification service to check the link and return the verification response
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
@@ -36,6 +42,7 @@ public class LinkVerificationController {
         private String pageText;
     }
 
+    // for returning the verification status and reason to the frontend after checking the link
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
