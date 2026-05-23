@@ -12,6 +12,8 @@ const BADGE_COLORS = {
     BLOCK: "#c1281f",
     USER_BYPASS: "#b86b00"
 };
+const RECENT_PREFLIGHT_REDIRECT_TTL_MS = 3000;
+const recentPreflightRedirects = new Map();
 
 const TRUSTED_DOMAINS = [
     "maybank2u.com.my",
@@ -234,6 +236,37 @@ function normalizeVerdictPayload(rawVerdict, scannedUrl, options = {}) {
     };
 }
 
+function buildBlockedPageUrl(verdict, blockedUrl) {
+    const params = new URLSearchParams();
+    params.set("blocked", blockedUrl);
+
+    if (verdict.reason) {
+        params.set("reason", verdict.reason);
+    }
+
+    if (typeof verdict.riskScore === "number") {
+        params.set("riskScore", String(verdict.riskScore));
+    }
+
+    if (typeof verdict.confidence === "number") {
+        params.set("confidence", String(verdict.confidence));
+    }
+
+    if (verdict.decisionId) {
+        params.set("decisionId", verdict.decisionId);
+    }
+
+    if (Array.isArray(verdict.reasons) && verdict.reasons.length > 0) {
+        params.set("reasons", JSON.stringify(verdict.reasons.slice(0, 5)));
+    }
+
+    if (verdict.evidenceSources) {
+        params.set("sources", verdict.evidenceSources);
+    }
+
+    return `${chrome.runtime.getURL("blocked.html")}?${params.toString()}`;
+}
+
 function getBadgeText(verdict) {
     if (!verdict) {
         return "";
@@ -298,6 +331,100 @@ function persistLastScan(verdict, sender) {
             lastScan: stampedVerdict,
             scanByTab
         });
+    });
+}
+
+function shouldSkipPreflightNavigation(details) {
+    if (!details || details.frameId !== 0 || details.tabId < 0 || !details.url) {
+        return true;
+    }
+
+    if (!details.url.startsWith("http://") && !details.url.startsWith("https://")) {
+        return true;
+    }
+
+    if (details.url.startsWith(API_BASE_URL)) {
+        return true;
+    }
+
+    const lastRedirectAt = recentPreflightRedirects.get(details.url);
+    if (lastRedirectAt && Date.now() - lastRedirectAt < RECENT_PREFLIGHT_REDIRECT_TTL_MS) {
+        return true;
+    }
+
+    return false;
+}
+
+function createPreflightVerdict(details) {
+    const localVerdict = evaluateWithLocalRules({
+        currentUrl: details.url,
+        pageText: details.url
+    });
+
+    if (localVerdict.status !== "BLOCK") {
+        return localVerdict;
+    }
+
+    const reasons = [
+        "Top-level navigation was checked before the page loaded.",
+        ...localVerdict.reasons
+    ];
+
+    return {
+        ...localVerdict,
+        reason: reasons[0],
+        reasons,
+        evidenceSources: `${localVerdict.evidenceSources},NAVIGATION_PREFLIGHT`,
+        scanMode: "NAVIGATION_PREFLIGHT",
+        backendAvailable: false
+    };
+}
+
+function blockPreflightNavigation(details, verdict) {
+    recentPreflightRedirects.set(details.url, Date.now());
+    persistLastScan(verdict, { tab: { id: details.tabId } });
+    pushBrowserNotification(verdict, true);
+
+    chrome.tabs.update(details.tabId, {
+        url: buildBlockedPageUrl(verdict, details.url)
+    }, () => {
+        const ignoredLastError = chrome.runtime.lastError;
+    });
+
+    if (LIVE_BACKEND_ENABLED) {
+        evaluateViaBackend({
+            currentUrl: details.url,
+            pageText: details.url
+        })
+            .then(backendVerdict => {
+                persistLastScan({
+                    ...backendVerdict,
+                    reason: verdict.reason,
+                    reasons: verdict.reasons,
+                    scanMode: "NAVIGATION_PREFLIGHT_BACKEND"
+                }, { tab: { id: details.tabId } });
+            })
+            .catch(() => {
+                // Local preflight already protected the user; backend evidence is best-effort.
+            });
+    }
+}
+
+if (chrome.webNavigation && chrome.webNavigation.onBeforeNavigate) {
+    chrome.webNavigation.onBeforeNavigate.addListener(details => {
+        if (shouldSkipPreflightNavigation(details)) {
+            return;
+        }
+
+        const verdict = createPreflightVerdict(details);
+        if (verdict.status === "BLOCK") {
+            blockPreflightNavigation(details, verdict);
+        } else if (verdict.status === "WARN") {
+            persistLastScan({
+                ...verdict,
+                scanMode: "NAVIGATION_PREFLIGHT"
+            }, { tab: { id: details.tabId } });
+        }
     });
 }
 

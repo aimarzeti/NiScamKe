@@ -99,6 +99,7 @@ http://localhost:8080/dashboard.html
 - Automatic scan: open `demo.html`, then open the extension popup. It should already show the current tab's scan result without pressing a scan button.
 - Badge signal: the extension icon shows `OK`, `!`, or `STOP` based on the latest tab decision.
 - Pre-click blocking: clicking the synthetic scam link is intercepted and scanned before navigation.
+- Direct URL blocking: paste `maybank-secure-login.test/verify-account?otp=required` into the address bar. The extension preflights the top-level navigation and redirects to the blocked page before Chrome's DNS error becomes the final user experience.
 - Credential-entry guard: focusing the fake password or OTP field triggers an extra protection refresh.
 - Evidence trail: `dashboard.html` shows the recent `ALLOW`, `WARN`, and `BLOCK` decisions for judges.
 
