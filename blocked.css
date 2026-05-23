@@ -34,7 +34,7 @@ h1 {
     margin-bottom: 12px;
 }
 
-.subtitile {
+.subtitle {
     text-align: center;
     font-size: 18px;
     line-height: 1.6;
@@ -86,7 +86,8 @@ button {
 
 .secondary-btn {
     background: white;
-    color: 2px solid #b91c1c;
+    border: 2px solid #b91c1c;
+    color: #b91c1c;
 }
 
 .footer-note {
