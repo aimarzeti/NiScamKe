@@ -45,16 +45,8 @@ public class GeminiIntegrationService {
     public boolean analyzeWithGemini(String domain, String pageText) {
         String normalizedDomain = domain == null ? "" : domain.toLowerCase(Locale.ROOT);
 
-        // 1. Fast-Path Local Validation (Malaysian bank mimicry detection)
-        boolean targetsMalaysianBank = BANK_KEYWORDS.stream()
-            .anyMatch(normalizedDomain::contains);
-
-        boolean trustedMalaysianDomain = TRUSTED_DOMAINS.contains(normalizedDomain)
-            || normalizedDomain.endsWith(".gov.my")
-            || normalizedDomain.endsWith(".edu.my")
-            || normalizedDomain.endsWith(".com.my");
-
-        if (targetsMalaysianBank && !trustedMalaysianDomain) {
+        int structuralRisk = calculateStructuralRisk(normalizedDomain);
+        if (structuralRisk >= 40) {
             System.out.println("[ScamShield Fast-Path] Structural bank mimic detected. Hard-blocking threat.");
             return true;
         }
@@ -200,6 +192,23 @@ public class GeminiIntegrationService {
             System.err.println("[ScamShield Parser] Error parsing Gemini response: " + e.getMessage());
             return false;
         }
+    }
+
+    public int assessStructuralRisk(String domain, String pageText) {
+        String normalizedDomain = domain == null ? "" : domain.toLowerCase(Locale.ROOT);
+        return calculateStructuralRisk(normalizedDomain);
+    }
+
+    private int calculateStructuralRisk(String normalizedDomain) {
+        boolean targetsMalaysianBank = BANK_KEYWORDS.stream()
+                .anyMatch(normalizedDomain::contains);
+
+        boolean trustedMalaysianDomain = TRUSTED_DOMAINS.contains(normalizedDomain)
+                || normalizedDomain.endsWith(".gov.my")
+                || normalizedDomain.endsWith(".edu.my")
+                || normalizedDomain.endsWith(".com.my");
+
+        return (targetsMalaysianBank && !trustedMalaysianDomain) ? 100 : 0;
     }
 
     public void connectToGemini() {
