@@ -7,6 +7,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -18,7 +20,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Builder
 @Entity
-@Table(name = "scam_registry")
+@Table(name = "scam_registry", indexes = {
+        @Index(name = "idx_domain_name", columnList = "domain_name")
+})
 public class ScamRegistry {
 
     @Id
@@ -45,4 +49,14 @@ public class ScamRegistry {
 
     @Column(name = "reported_at", nullable = false)
     private LocalDateTime reportedAt;
+
+    @PrePersist
+    protected void onCreate() {
+        if (this.flaggedAt == null) {
+            this.flaggedAt = LocalDateTime.now();
+        }
+        if (this.reportedAt == null) {
+            this.reportedAt = LocalDateTime.now();
+        }
+    }
 }
