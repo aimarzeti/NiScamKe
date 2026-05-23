@@ -1,13 +1,10 @@
-// VerificationService.java
-// for handling the core logic of verifying links against the scam registry and integrating with Gemini for unknown domains
-
 package com.niscamke.backend.service; 
 
-// import for working with URIs, dates, and locales
 import java.net.URI;
 import java.time.LocalDateTime;
 import java.util.Locale;
 
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import com.niscamke.backend.controller.LinkVerificationController.VerificationRequest;
@@ -24,7 +21,8 @@ public class VerificationService {
     private final ScamRegistryRepository scamRegistryRepository;
     private final GeminiIntegrationService geminiIntegrationService;
 
-    public VerificationResponse checkLink(VerificationRequest request) {
+    @Cacheable(value = "domainVerifications", key = "#request.currentUrl")
+public VerificationResponse checkLink(VerificationRequest request) {
         String domain = extractDomainName(request.getCurrentUrl());
         if (domain.isBlank()) {
             return new VerificationResponse("ALLOW", "Unable to verify malformed URL");
@@ -37,7 +35,6 @@ public class VerificationService {
                 .orElseGet(() -> analyzeUnknownDomain(domain, request.getPageText()));
     }
 
-    // for analyzing unknown domains using Gemini and saving any detected scams to the registry
     private VerificationResponse analyzeUnknownDomain(String domain, String pageText) {
         boolean isScam = geminiIntegrationService.analyzeWithGemini(domain, pageText);
 
@@ -47,7 +44,7 @@ public class VerificationService {
                     .domainName(domain)
                     .scamType("AI_DETECTED")
                     .threatLevel("HIGH")
-                    .description("Automatically flagged by Gemini structural fallback rule")
+                    .description("Automatically flagged by Gemini AI analysis")
                     .flaggedAt(now)
                     .reportedBy("SYSTEM")
                     .reportedAt(now)
@@ -57,7 +54,7 @@ public class VerificationService {
 
             return new VerificationResponse(
                     "BLOCK",
-                    "AI analysis indicates this domain may be a scam.\nPLEASE PROCEED WITH CAUTION.");
+                    "AI analysis indicates this domain may be a scam. Please proceed with caution.");
         }
 
         return new VerificationResponse("ALLOW", "No scam indicators detected for this domain.");
@@ -97,3 +94,4 @@ public class VerificationService {
         return domain;
     }
 }
+
