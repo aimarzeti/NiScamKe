@@ -50,4 +50,20 @@ public class LinkVerificationController {
         private String status;
         private String reason;
     }
+
+    @PostMapping("/report-scam")
+public ResponseEntity<String> reportScam(@RequestBody ReportRequest request) {
+    verificationService.submitCommunityReport(request);
+    return ResponseEntity.ok("Report submitted. Thank you for keeping Malaysia safe!");
+}
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public static class ReportRequest {
+    private String url;
+    private String reporterEmail; // optional
+    private String scamType;      // "PHISHING", "INVESTMENT_SCAM", "PARCEL_SCAM"
+    private String description;
+}
 }

@@ -7,6 +7,7 @@ import java.util.Locale;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
+import com.niscamke.backend.controller.LinkVerificationController.ReportRequest;
 import com.niscamke.backend.controller.LinkVerificationController.VerificationRequest;
 import com.niscamke.backend.controller.LinkVerificationController.VerificationResponse;
 import com.niscamke.backend.model.ScamRegistry;
@@ -36,21 +37,14 @@ public VerificationResponse checkLink(VerificationRequest request) {
     }
 
     private VerificationResponse analyzeUnknownDomain(String domain, String pageText) {
+        int structuralRisk = geminiIntegrationService.assessStructuralRisk(domain, pageText);
         boolean isScam = geminiIntegrationService.analyzeWithGemini(domain, pageText);
 
         if (isScam) {
-            LocalDateTime now = LocalDateTime.now();
-            ScamRegistry scamRegistry = ScamRegistry.builder()
-                    .domainName(domain)
-                    .scamType("AI_DETECTED")
-                    .threatLevel("HIGH")
-                    .description("Automatically flagged by Gemini AI analysis")
-                    .flaggedAt(now)
-                    .reportedBy("SYSTEM")
-                    .reportedAt(now)
-                    .build();
-
-            scamRegistryRepository.save(scamRegistry);
+            // ✅ Only auto-save if BOTH fast-path AND AI agree it's a scam
+            if (structuralRisk >= 40) {
+                saveToRegistry(domain);
+            }
 
             return new VerificationResponse(
                     "BLOCK",
@@ -58,6 +52,49 @@ public VerificationResponse checkLink(VerificationRequest request) {
         }
 
         return new VerificationResponse("ALLOW", "No scam indicators detected for this domain.");
+    }
+
+    private void saveToRegistry(String domain) {
+        LocalDateTime now = LocalDateTime.now();
+        ScamRegistry scamRegistry = ScamRegistry.builder()
+                .domainName(domain)
+                .scamType("AI_DETECTED")
+                .threatLevel("HIGH")
+                .description("Automatically flagged by Gemini AI analysis")
+                .flaggedAt(now)
+                .reportedBy("SYSTEM")
+                .reportedAt(now)
+                .build();
+
+        scamRegistryRepository.save(scamRegistry);
+    }
+
+    public void submitCommunityReport(ReportRequest request) {
+        String domain = extractDomainName(request.getUrl());
+        if (domain.isBlank()) {
+            return;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        scamRegistryRepository.findByDomainName(domain)
+                .map(existing -> {
+                    existing.setScamType(request.getScamType() != null ? request.getScamType() : "COMMUNITY_REPORTED");
+                    existing.setThreatLevel("HIGH");
+                    existing.setDescription(request.getDescription() != null ? request.getDescription() : "Community report submitted");
+                    existing.setFlaggedAt(now);
+                    existing.setReportedBy(request.getReporterEmail() != null ? request.getReporterEmail() : "COMMUNITY");
+                    existing.setReportedAt(now);
+                    return scamRegistryRepository.save(existing);
+                })
+                .orElseGet(() -> scamRegistryRepository.save(ScamRegistry.builder()
+                        .domainName(domain)
+                        .scamType(request.getScamType() != null ? request.getScamType() : "COMMUNITY_REPORTED")
+                        .threatLevel("HIGH")
+                        .description(request.getDescription() != null ? request.getDescription() : "Community report submitted")
+                        .flaggedAt(now)
+                        .reportedBy(request.getReporterEmail() != null ? request.getReporterEmail() : "COMMUNITY")
+                        .reportedAt(now)
+                        .build()));
     }
 
     private String extractDomainName(String urlString) {
