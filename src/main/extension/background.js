@@ -183,26 +183,6 @@ chrome.runtime.onMessage.addListener((incomingMessage, sender, dispatchVerdictCa
 
         return true;
     }
-
-    if (incomingMessage.action === "triggerDemoNotification") {
-        const demoStatus = incomingMessage.status === "BLOCK" ? "BLOCK" : "ALLOW";
-
-        const demoVerdict = normalizeVerdictPayload({
-            status: demoStatus,
-            riskScore: demoStatus === "BLOCK" ? 91 : 18,
-            confidence: demoStatus === "BLOCK" ? 0.96 : 0.93,
-            reasons: [
-                demoStatus === "BLOCK"
-                    ? "Demo alert triggered for judge walkthrough."
-                    : "Demo safe scan triggered for judge walkthrough."
-            ],
-            evidenceSources: "DEMO"
-        }, incomingMessage.currentUrl || "https://demo.local");
-
-        persistLastScan(demoVerdict);
-        pushBrowserNotification(demoVerdict, true);
-        dispatchVerdictCallback({ ok: true });
-        return true;
-    }
 });
+
 

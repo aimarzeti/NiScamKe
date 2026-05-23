@@ -1,4 +1,6 @@
 // NiScamKeApplication.java
+// main application class for the NiScamKe backend, responsible for bootstrapping the Spring Boot application and enabling caching yey
+
 
 package com.niscamke.backend;
 

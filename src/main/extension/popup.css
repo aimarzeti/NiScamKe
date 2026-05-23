@@ -1,116 +1,69 @@
-:root {
-    --safe: #0f9d58;
-    --warn: #f39c12;
-    --danger: #d93025;
-    --ink: #10243e;
-    --muted: #5e6d80;
-}
-
-* {
-    box-sizing: border-box;
+.danger {
+    display: none;
 }
 
 body {
     margin: 0;
-    width: 360px;
-    font-family: "Segoe UI", "Poppins", sans-serif;
-    color: var(--ink);
-    background: radial-gradient(circle at top right, #f7fbff 0%, #f2f6ff 48%, #eef2ff 100%);
+    width: 300px;
+    font-family: Arial, sans-serif;
+    background-color: #f8fafc;
 }
 
 .popup {
-    padding: 16px;
+    padding: 22px;
+    text-align: center;
 }
 
-.tag {
-    margin: 0 0 8px;
-    display: inline-block;
-    padding: 4px 10px;
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.03em;
-    background: #e6edf8;
-    color: #29446d;
-}
-
-.popup.safe .tag {
-    background: #e6f7ef;
-    color: #0f9d58;
-}
-
-.popup.warn .tag {
-    background: #fff4df;
-    color: #b97000;
-}
-
-.popup.block .tag {
-    background: #fde8e7;
-    color: #b42318;
+.shield {
+    font-size: 48px;
 }
 
 h1 {
-    margin: 2px 0 8px;
-    font-size: 22px;
+    font-size: 24px;
+    margin: 8px 0;
 }
 
 .status {
-    margin: 0 0 12px;
-    color: var(--muted);
-    line-height: 1.35;
+    font-size: 16px;
+    font-weight: bold;
 }
 
 .info-box {
     background: #ffffff;
-    border-radius: 12px;
+    border-radius: 14px;
     padding: 12px;
-    box-shadow: 0 4px 18px rgba(16, 36, 62, 0.09);
-    margin-bottom: 12px;
-}
-
-.info-box p {
-    margin: 0 0 8px;
-    font-size: 13px;
-    line-height: 1.35;
-}
-
-.info-box p:last-child {
-    margin-bottom: 0;
-}
-
-.actions {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 8px;
+    margin: 16px 0;
+    text-align: left;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
 }
 
 button {
     width: 100%;
-    border: 0;
-    border-radius: 10px;
-    padding: 10px 12px;
-    font-size: 14px;
-    font-weight: 700;
+    padding: 12px;
+    border-radius: 12px;
+    border: none;
+    background: #2563eb;
+    color: #ffffff;
+    font-weight: bold;
     cursor: pointer;
 }
 
-button.primary {
-    background: #0b5ed7;
-    color: #fff;
+.safe .status {
+    color: #16a34a;
 }
 
-button.danger {
-    background: var(--danger);
-    color: #fff;
+.danger .status {
+    color: #dc2626;
+    animation: flash 1s infinite;
 }
 
-button.neutral {
-    background: #ffffff;
-    color: var(--ink);
-    border: 1px solid #d5deea;
+.danger .info-box {
+    border: 2px solid #dc2626;
+    background: #fee2e2;
 }
 
-button:disabled {
-    opacity: 0.65;
-    cursor: not-allowed;
+@keyframes flash {
+    0% { opacity: 1; }
+    50% { opacity: 0.45; }
+    100% { opacity: 1; }
 }
