@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NiScamKe Partner API Demo</title>
+  <style>
+    :root {
+      --ink: #10243e;
+      --muted: #607084;
+      --line: #dbe4ef;
+      --paper: #fffdf8;
+      --safe: #11845b;
+      --warn: #b86b00;
+      --danger: #c1281f;
+      --blue: #1155cc;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Trebuchet MS", "Aptos", sans-serif;
+      color: var(--ink);
+      background: linear-gradient(135deg, #f8fbff 0%, #fff8ee 100%);
+    }
+
+    main {
+      width: min(980px, 100%);
+      margin: 0 auto;
+      padding: 28px 18px 44px;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 0.9fr 1.1fr;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .panel {
+      border: 1px solid rgba(16, 36, 62, 0.12);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.9);
+      box-shadow: 0 16px 38px rgba(16, 36, 62, 0.12);
+      padding: 20px;
+    }
+
+    .phone {
+      max-width: 380px;
+      margin: 0 auto;
+      border: 10px solid #10243e;
+      border-radius: 30px;
+      background: var(--paper);
+      overflow: hidden;
+    }
+
+    .phone-head {
+      padding: 16px;
+      background: #10243e;
+      color: #ffffff;
+      font-weight: 900;
+    }
+
+    .phone-body {
+      padding: 16px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(30px, 5vw, 48px);
+      line-height: 1;
+    }
+
+    h2 {
+      margin: 0 0 10px;
+      font-size: 20px;
+    }
+
+    p {
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    label {
+      display: block;
+      margin-top: 12px;
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    input,
+    textarea,
+    select {
+      width: 100%;
+      margin-top: 6px;
+      padding: 11px 12px;
+      border: 1px solid #ccd6e2;
+      border-radius: 10px;
+      font: inherit;
+      color: var(--ink);
+      background: #ffffff;
+    }
+
+    textarea {
+      min-height: 86px;
+      resize: vertical;
+    }
+
+    button {
+      width: 100%;
+      margin-top: 14px;
+      min-height: 44px;
+      border: 0;
+      border-radius: 12px;
+      background: var(--blue);
+      color: #ffffff;
+      cursor: pointer;
+      font: inherit;
+      font-weight: 900;
+    }
+
+    .quick-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .quick-actions button {
+      margin: 0;
+      background: #eef3ff;
+      color: var(--blue);
+    }
+
+    .result {
+      margin-top: 14px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+      background: #ffffff;
+    }
+
+    .decision {
+      display: inline-flex;
+      padding: 5px 10px;
+      border-radius: 999px;
+      color: #ffffff;
+      font-weight: 900;
+    }
+
+    .decision.ALLOW { background: var(--safe); }
+    .decision.WARN { background: var(--warn); }
+    .decision.BLOCK { background: var(--danger); }
+    .decision.UNAUTHORIZED { background: #637186; }
+
+    .meta {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .meta div {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      background: #fbfdff;
+    }
+
+    .meta span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .meta strong {
+      display: block;
+      margin-top: 4px;
+      overflow-wrap: anywhere;
+    }
+
+    pre {
+      overflow: auto;
+      margin: 14px 0 0;
+      padding: 12px;
+      border-radius: 12px;
+      background: #10243e;
+      color: #ffffff;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    @media (max-width: 820px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="layout">
+      <div class="panel">
+        <h1>Partner API mobile demo</h1>
+        <p>
+          This simulates a bank, e-wallet, university, or telco app checking a link
+          before showing it to a phone user.
+        </p>
+
+        <label for="partnerId">Partner ID</label>
+        <input id="partnerId" value="demo-ewallet">
+
+        <label for="channel">Channel</label>
+        <select id="channel">
+          <option value="EWALLET">E-wallet</option>
+          <option value="BANKING_APP">Banking app</option>
+          <option value="UNIVERSITY_PORTAL">University portal</option>
+          <option value="TELCO_APP">Telco app</option>
+          <option value="MOBILE_WEB">Mobile web</option>
+        </select>
+
+        <label for="url">External link</label>
+        <input id="url" value="https://maybank-secure-login.test/verify-account?otp=required">
+
+        <label for="pageText">Message or page context</label>
+        <textarea id="pageText">Verify your Maybank account password and OTP immediately.</textarea>
+
+        <div class="quick-actions">
+          <button type="button" id="safeSample">Safe sample</button>
+          <button type="button" id="scamSample">Scam sample</button>
+        </div>
+
+        <button type="button" id="scanButton">Scan as partner app</button>
+      </div>
+
+      <div class="phone">
+        <div class="phone-head">Partner App Link Check</div>
+        <div class="phone-body">
+          <h2>Before opening link</h2>
+          <p id="statusText">Run a scan to see what a mobile app would show the user.</p>
+
+          <div class="result" id="resultBox" hidden>
+            <span class="decision" id="decisionLabel">-</span>
+            <p id="userMessage"></p>
+
+            <div class="meta">
+              <div><span>Action</span><strong id="actionValue">-</strong></div>
+              <div><span>Risk</span><strong id="riskValue">-</strong></div>
+              <div><span>Partner</span><strong id="partnerValue">-</strong></div>
+              <div><span>Threat</span><strong id="threatValue">-</strong></div>
+            </div>
+
+            <pre id="rawJson"></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const demoApiKey = "demo-partner-key";
+
+    function setSample(kind) {
+      if (kind === "safe") {
+        document.getElementById("url").value = "https://www.maybank2u.com.my/";
+        document.getElementById("pageText").value = "Official Maybank2u banking page opened from partner app.";
+        return;
+      }
+
+      document.getElementById("url").value = "https://maybank-secure-login.test/verify-account?otp=required";
+      document.getElementById("pageText").value = "Verify your Maybank account password and OTP immediately.";
+    }
+
+    function renderResponse(data) {
+      const resultBox = document.getElementById("resultBox");
+      const decisionLabel = document.getElementById("decisionLabel");
+
+      resultBox.hidden = false;
+      decisionLabel.className = `decision ${data.decision || ""}`;
+      decisionLabel.textContent = data.decision || "-";
+      document.getElementById("userMessage").textContent = data.userMessage || "-";
+      document.getElementById("actionValue").textContent = data.recommendedAction || "-";
+      document.getElementById("riskValue").textContent = data.riskScore == null ? "-" : `${data.riskScore}/100`;
+      document.getElementById("partnerValue").textContent = data.partnerId || "-";
+      document.getElementById("threatValue").textContent = data.threatType || "-";
+      document.getElementById("rawJson").textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function scanPartnerLink() {
+      const statusText = document.getElementById("statusText");
+      const scanButton = document.getElementById("scanButton");
+
+      scanButton.disabled = true;
+      scanButton.textContent = "Scanning...";
+      statusText.textContent = "Calling /api/v1/partner/scan-link with partner API key.";
+
+      try {
+        const body = {
+          partnerId: document.getElementById("partnerId").value.trim(),
+          channel: document.getElementById("channel").value,
+          url: document.getElementById("url").value.trim(),
+          pageText: document.getElementById("pageText").value.trim(),
+          userJourney: "EXTERNAL_LINK",
+          clientTimestamp: new Date().toISOString()
+        };
+
+        const response = await fetch("/api/v1/partner/scan-link", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-NISCAMKE-PARTNER-KEY": demoApiKey,
+            "X-NISCAMKE-PARTNER-ID": body.partnerId || "demo-partner"
+          },
+          body: JSON.stringify(body)
+        });
+
+        const data = await response.json();
+        renderResponse(data);
+        statusText.textContent = response.ok
+          ? "Partner app received a mobile-friendly safety decision."
+          : "Partner API rejected the request.";
+      } catch (error) {
+        renderResponse({
+          decision: "ERROR",
+          userMessage: "Could not reach the partner API. Make sure the backend is running.",
+          recommendedAction: "RETRY",
+          riskScore: null,
+          partnerId: document.getElementById("partnerId").value.trim() || "demo-partner",
+          threatType: "UNKNOWN",
+          error: error.message
+        });
+      } finally {
+        scanButton.disabled = false;
+        scanButton.textContent = "Scan as partner app";
+      }
+    }
+
+    document.getElementById("safeSample").addEventListener("click", () => setSample("safe"));
+    document.getElementById("scamSample").addEventListener("click", () => setSample("scam"));
+    document.getElementById("scanButton").addEventListener("click", scanPartnerLink);
+  </script>
+</body>
+</html>

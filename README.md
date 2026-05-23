@@ -62,6 +62,14 @@ testing
 $env:GEMINI_API_KEY="your-gemini-api-key"
 ```
 
+Optional partner API key for bank, e-wallet, university, or telco integrations:
+
+```powershell
+$env:NISCAMKE_PARTNER_API_KEY="your-partner-key"
+```
+
+If this is not set, the local partner demo uses `demo-partner-key`.
+
 3. Start the backend:
 
 ```powershell
@@ -74,7 +82,13 @@ $env:GEMINI_API_KEY="your-gemini-api-key"
 http://localhost:8080/dashboard.html
 ```
 
-5. Load the Chrome extension:
+5. Open the partner/mobile API demo:
+
+```text
+http://localhost:8080/partner-demo.html
+```
+
+6. Load the Chrome extension:
 
 - Open Chrome Extensions.
 - Enable Developer Mode.
@@ -101,6 +115,7 @@ http://localhost:8080/dashboard.html
 - Pre-click blocking: clicking the synthetic scam link is intercepted and scanned before navigation.
 - Direct URL blocking: paste `maybank-secure-login.test/verify-account?otp=required` into the address bar. The extension preflights the top-level navigation and redirects to the blocked page before Chrome's DNS error becomes the final user experience.
 - Credential-entry guard: focusing the fake password or OTP field triggers an extra protection refresh.
+- Mobile/partner proof: open `partner-demo.html`, scan the synthetic scam link, and show the `BLOCK_AND_SHOW_INTERSTITIAL` action that a bank or e-wallet app would use.
 - Evidence trail: `dashboard.html` shows the recent `ALLOW`, `WARN`, and `BLOCK` decisions for judges.
 
 ## Testing Evidence
@@ -122,6 +137,7 @@ The script writes timestamped CSV results into `testing/results/` and prints:
 ## API Summary
 
 - `POST /api/v1/scan-url` scans a URL and page text.
+- `POST /api/v1/partner/scan-link` lets banks, e-wallets, universities, or telcos scan a link before opening it in a mobile or partner app. Send `X-NISCAMKE-PARTNER-KEY`.
 - `POST /api/v1/report-url` submits a community scam report.
 - `POST /api/v1/false-positive` submits a false-positive review request.
 - `GET /api/v1/false-positive?status=PENDING_REVIEW` lists review items.
@@ -129,6 +145,32 @@ The script writes timestamped CSV results into `testing/results/` and prints:
 - `GET /api/v1/admin/summary` returns dashboard counts.
 - `GET /api/v1/admin/recent-decisions` returns recent scan decisions.
 - `GET /api/v1/health` checks backend health.
+
+### Partner API Example
+
+```powershell
+$body = @{
+  partnerId = "demo-ewallet"
+  channel = "EWALLET"
+  url = "https://maybank-secure-login.test/verify-account?otp=required"
+  pageText = "Verify your Maybank account password and OTP immediately."
+  userJourney = "EXTERNAL_LINK"
+  clientTimestamp = (Get-Date).ToString("o")
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Uri "http://localhost:8080/api/v1/partner/scan-link" `
+  -Method Post `
+  -ContentType "application/json" `
+  -Headers @{ "X-NISCAMKE-PARTNER-KEY" = "demo-partner-key"; "X-NISCAMKE-PARTNER-ID" = "demo-ewallet" } `
+  -Body $body
+```
+
+Partner apps use `recommendedAction`:
+
+- `OPEN_LINK`: allow the app to open the URL.
+- `SHOW_WARNING_BEFORE_OPEN`: show a caution screen first.
+- `BLOCK_AND_SHOW_INTERSTITIAL`: block the external link and show a safety warning.
 
 ## Privacy and Safety Notes
 
