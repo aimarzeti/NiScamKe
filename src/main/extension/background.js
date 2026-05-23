@@ -6,6 +6,12 @@
 const API_BASE_URL = "http://localhost:8080";
 const LIVE_BACKEND_ENABLED = true;
 const LIVE_SCAMSHIELD_SCAN_ROUTE = `${API_BASE_URL}/api/v1/scan-url`;
+const BADGE_COLORS = {
+    ALLOW: "#11845b",
+    WARN: "#b86b00",
+    BLOCK: "#c1281f",
+    USER_BYPASS: "#b86b00"
+};
 
 const TRUSTED_DOMAINS = [
     "maybank2u.com.my",
@@ -228,11 +234,70 @@ function normalizeVerdictPayload(rawVerdict, scannedUrl, options = {}) {
     };
 }
 
-function persistLastScan(verdict) {
-    chrome.storage.local.set({
-        scamStatus: verdict.status,
-        scamType: verdict.reason,
-        lastScan: verdict
+function getBadgeText(verdict) {
+    if (!verdict) {
+        return "";
+    }
+
+    if (verdict.scanMode === "USER_BYPASS") {
+        return "!";
+    }
+
+    if (verdict.status === "ALLOW") {
+        return "OK";
+    }
+
+    if (verdict.status === "WARN") {
+        return "!";
+    }
+
+    if (verdict.status === "BLOCK") {
+        return "STOP";
+    }
+
+    return "";
+}
+
+function updateProtectionBadge(verdict, tabId) {
+    if (!tabId || !chrome.action) {
+        return;
+    }
+
+    const badgeText = getBadgeText(verdict);
+    chrome.action.setBadgeText({ tabId, text: badgeText });
+
+    if (badgeText) {
+        const badgeColor = BADGE_COLORS[verdict.scanMode === "USER_BYPASS" ? "USER_BYPASS" : verdict.status] || "#637186";
+        chrome.action.setBadgeBackgroundColor({ tabId, color: badgeColor });
+    }
+
+    const title = verdict
+        ? `Ni Scam Ke? ${verdict.status} - Risk ${verdict.riskScore}/100`
+        : "Ni Scam Ke?";
+    chrome.action.setTitle({ tabId, title });
+}
+
+function persistLastScan(verdict, sender) {
+    const tabId = sender && sender.tab && sender.tab.id;
+
+    chrome.storage.local.get(["scanByTab"], data => {
+        const scanByTab = data.scanByTab || {};
+        const stampedVerdict = {
+            ...verdict,
+            sourceTabId: tabId || null
+        };
+
+        if (tabId) {
+            scanByTab[String(tabId)] = stampedVerdict;
+            updateProtectionBadge(stampedVerdict, tabId);
+        }
+
+        chrome.storage.local.set({
+            scamStatus: verdict.status,
+            scamType: verdict.reason,
+            lastScan: stampedVerdict,
+            scanByTab
+        });
     });
 }
 
@@ -466,6 +531,51 @@ function evaluateViaBackend(incomingMessage) {
         }));
 }
 
+function applyClientSideContext(verdict, incomingMessage) {
+    if (!verdict || !incomingMessage || !incomingMessage.credentialFieldDetected) {
+        return verdict;
+    }
+
+    const host = normalizeHost(incomingMessage.currentUrl);
+    if (matchesTrustedDomain(host) || verdict.status !== "ALLOW") {
+        return verdict;
+    }
+
+    const pageText = `${incomingMessage.pageText || ""} ${incomingMessage.credentialFieldLabel || ""}`.toLowerCase();
+    const sensitiveFinancialContext = [
+        "otp",
+        "tac",
+        "fpx",
+        "bank",
+        "maybank",
+        "cimb",
+        "bank islam",
+        "password",
+        "kata laluan",
+        "card",
+        "kad"
+    ].some(term => pageText.includes(term));
+
+    if (!sensitiveFinancialContext && verdict.riskScore < 20) {
+        return verdict;
+    }
+
+    const reasons = [
+        "Sensitive credential entry was detected on an untrusted page.",
+        ...verdict.reasons
+    ];
+
+    return {
+        ...verdict,
+        status: "WARN",
+        reason: reasons[0],
+        reasons,
+        riskScore: Math.max(verdict.riskScore, 58),
+        confidence: Math.max(verdict.confidence, 0.74),
+        evidenceSources: `${verdict.evidenceSources},CLIENT_CREDENTIAL_GUARD`
+    };
+}
+
 chrome.runtime.onMessage.addListener((incomingMessage, sender, dispatchVerdictCallback) => {
     if (incomingMessage.action !== "evaluateNetworkTarget") {
         return false;
@@ -495,9 +605,10 @@ chrome.runtime.onMessage.addListener((incomingMessage, sender, dispatchVerdictCa
     });
 
     verdictPromise
+        .then(verdict => applyClientSideContext(verdict, incomingMessage))
         .then(verdict => {
-            persistLastScan(verdict);
-            pushBrowserNotification(verdict);
+            persistLastScan(verdict, sender);
+            pushBrowserNotification(verdict, incomingMessage.forceNotification === true);
             dispatchVerdictCallback(verdict);
         })
         .catch(error => {
@@ -511,7 +622,7 @@ chrome.runtime.onMessage.addListener((incomingMessage, sender, dispatchVerdictCa
                 evidenceSources: "FAILSAFE"
             }, incomingMessage.currentUrl, { scanMode: "FAILSAFE", backendAvailable: false });
 
-            persistLastScan(safeFallbackVerdict);
+            persistLastScan(safeFallbackVerdict, sender);
             dispatchVerdictCallback(safeFallbackVerdict);
         });
 

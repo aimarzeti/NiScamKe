@@ -85,12 +85,22 @@ http://localhost:8080/dashboard.html
 
 1. Start the backend on `localhost:8080`.
 2. Open `http://localhost:8080/dashboard.html`.
-3. Load the extension and visit a safe Malaysian bank URL.
-4. Visit a suspicious synthetic URL such as `https://maybank-secure-login.test`.
-5. Show the blocked page, risk score, reasons, and false-positive report form.
-6. Submit a false-positive report.
-7. Open `http://localhost:8080/review.html` and approve or reject the report.
-8. Return to the dashboard to show updated scan and review metrics.
+3. Load or reload the Chrome extension from `src/main/extension`.
+4. Open `http://localhost:8080/demo.html`.
+5. Point out that the extension badge updates automatically after the page scan.
+6. Click the synthetic scam link: `https://maybank-secure-login.test/verify-account?otp=required`.
+7. Show that Ni Scam Ke? blocks the URL before the browser reaches the fake site.
+8. Show the blocked page, risk score, reasons, and false-positive report form.
+9. Return to the dashboard to show the new `BLOCK` decision in recent decisions.
+10. Submit a false-positive report, open `http://localhost:8080/review.html`, and approve or reject it.
+
+## Pitch Proof Checklist
+
+- Automatic scan: open `demo.html`, then open the extension popup. It should already show the current tab's scan result without pressing a scan button.
+- Badge signal: the extension icon shows `OK`, `!`, or `STOP` based on the latest tab decision.
+- Pre-click blocking: clicking the synthetic scam link is intercepted and scanned before navigation.
+- Credential-entry guard: focusing the fake password or OTP field triggers an extra protection refresh.
+- Evidence trail: `dashboard.html` shows the recent `ALLOW`, `WARN`, and `BLOCK` decisions for judges.
 
 ## Testing Evidence
 
