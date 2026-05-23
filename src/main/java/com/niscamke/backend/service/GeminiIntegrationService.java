@@ -231,6 +231,8 @@ public class GeminiIntegrationService {
         boolean highRiskTld = HIGH_RISK_TLDS.stream()
                 .anyMatch(normalizedDomain::endsWith);
 
+        boolean establishedMalaysianTld = normalizedDomain.endsWith(".my");
+
         String normalizedPageText = pageText == null ? "" : pageText.toLowerCase(Locale.ROOT);
         boolean asksForSensitiveInfo = normalizedPageText.contains("otp")
                 || normalizedPageText.contains("password")
@@ -241,6 +243,10 @@ public class GeminiIntegrationService {
 
         if (targetsMalaysianBank && hasSuspiciousToken) {
             return 100;
+        }
+
+        if (targetsMalaysianBank && establishedMalaysianTld) {
+            return 60;
         }
 
         if (targetsMalaysianBank) {

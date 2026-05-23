@@ -189,6 +189,7 @@ function evaluateWithLocalRules(incomingMessage) {
     const targetsBank = BANK_KEYWORDS.some(keyword => host.includes(keyword));
     const matchedPattern = SUSPICIOUS_PATTERNS.find(pattern => normalizedUrl.includes(pattern));
     const highRiskTld = HIGH_RISK_TLDS.some(tld => host.endsWith(tld));
+    const establishedMalaysianTld = host.endsWith(".my");
     const asksForSensitiveInfo = pageText.includes("otp") ||
         pageText.includes("password") ||
         pageText.includes("kata laluan") ||
@@ -204,6 +205,16 @@ function evaluateWithLocalRules(incomingMessage) {
                 `Matched suspicious token: ${matchedPattern}`
             ],
             evidenceSources: "LOCAL_BANK_MIMIC_RULES"
+        }, targetUrl, { scanMode: "LOCAL_RULES", backendAvailable: false });
+    }
+
+    if (targetsBank && establishedMalaysianTld) {
+        return normalizeVerdictPayload({
+            status: "WARN",
+            riskScore: 62,
+            confidence: 0.74,
+            reasons: ["This appears bank-related but is not in the trusted list yet. Verify before entering sensitive details."],
+            evidenceSources: "LOCAL_REVIEW_REQUIRED"
         }, targetUrl, { scanMode: "LOCAL_RULES", backendAvailable: false });
     }
 
