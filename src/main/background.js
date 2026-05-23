@@ -53,23 +53,30 @@ chrome.runtime.onMessage.addListener((incomingMessage, sender, dispatchVerdictCa
             const isSuspicious = suspiciousPatterns.some(pattern => targetUrl.contains(pattern)
             );
 
-            if (isTrusted && isSuspicious) {
-                chrome.storage.local.set({ 
-                    scamStatus: "BLOCK", 
-                    scamType: "Bank Impersonation Scam" 
-                });
+           if (isTrusted) {
+            chrome.storage.local.set({
+                scamStatus: "ALLOW",
+                scamType: "Official trusted domain"
+            });
 
-                dispatchVerdictCallback({ status: "BLOCK" });
+            dispatchVerdictCallback({ status: "ALLOW" });
 
-            } else {
-                chrome.storage.local.set({
-                    scamStatus: "ALLOW", 
-                    scamType: "None Detected" 
-                });
+        } else if (isSuspicious) {
+            chrome.storage.local.set({ 
+                scamStatus: "BLOCK", 
+                scamType: "Bank Impersonation Scam" 
+            });
 
-                dispatchVerdictCallback({ status: "ALLOW" });
-            }
+            dispatchVerdictCallback({ status: "BLOCK" });
 
+        } else {
+            chrome.storage.local.set({
+                scamStatus: "ALLOW", 
+                scamType: "None Detected" 
+            });
+
+            dispatchVerdictCallback({ status: "ALLOW" });
+        }
             return true;
 
         }
