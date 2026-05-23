@@ -1,0 +1,71 @@
+.danger {
+    display: none;
+}
+
+body {
+    margin: 0;
+    width: 300px;
+    font-family: Arial, sans-serif;
+    background-color: #f8fafc;
+}
+
+.popup {
+    padding: 22px;
+    text-align: center;
+}
+
+.shield {
+    font-size: 48px;
+}
+
+h1 {
+    font-size: 24px;
+    margin: 8px 0;
+}
+
+.status {
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.info-box {
+    background: rgb(255, 255, 255);
+    border-radius: 14px;
+    padding: 12px;
+    margin: 16px 0;
+    text-align: left;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+}
+
+button {
+    width: 100%;
+    padding: 12px;
+    border-radius: 12px;
+    border: none;
+    background: #2563eb;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.safe .status {
+    color: #16a34a;
+}
+
+.danger .status {
+    color: #dc2626;
+    animation: flash 1s infinite;
+}
+
+.danger  .info-box {
+    border: 2px solid #dc2626;
+    background: #fee2e2;
+}
+
+@keyframes flash {
+    0% {opacity: 1;}
+    50% {opacity: 0.45;}
+    100% {opacity: 1;}
+}
+
+

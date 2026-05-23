@@ -1,21 +1,25 @@
 package com.niscamke.backend.service;
 
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Locale;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
+/**
+ * SCAMSHIELD AI - DEEP CORE REASONING ENGINE (PERSON 2)
+ * Ganti fail tapak Person 1 dengan kod penuh API Gemini ini.
+ */
 @Service
 public class GeminiIntegrationService {
-
-    private static final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=";
-
-    @Value("${gemini.api.key}")
-    private String apiKey;
 
     public boolean analyzeWithGemini(String domain, String pageText) {
         String normalizedDomain = domain == null ? "" : domain.toLowerCase(Locale.ROOT);
 
+        // 1. Fast-Path Local Validation (Geng bank tiruan)
         boolean targetsMalaysianBank = normalizedDomain.contains("bimb")
                 || normalizedDomain.contains("cimb")
                 || normalizedDomain.contains("maybank")
@@ -25,11 +29,11 @@ public class GeminiIntegrationService {
                 || normalizedDomain.endsWith(".my");
 
         if (targetsMalaysianBank && !trustedMalaysianDomain) {
-            return true;
+            System.out.println("[ScamShield Fast-Path] Structural bank mimic detected. Hard-blocking threat.");
+            return true; 
         }
 
         /*
-        * Part Kayla, Part Person 2: haa
          * Day 2 Gemini integration handoff:
          *
          * Person 2 can add the live Google Gemini WebClient / REST call here.

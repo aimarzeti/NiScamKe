@@ -1,27 +1,38 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
-    <div class="popup-panel">
-        <div class="brand-group">
-            <span class="shield-logo">🛡️</span>
-            <h2>ScamShield AI</h2>
-        </div>
-        <div class="status-indicator active">
-            <div class="pulse-core"></div>
-            <p>Layer 1 Security Enabled</p>
-        </div>
-        <div class="telemetry-card">
-            <div class="telemetry-row">
-                <span class="label">Architecture Mode</span>
-                <span class="value">Dual Extension + DNS</span>
+<html lang="ms">
+    <head>
+        <meta charset="UTF-8" />
+        <title> Ni Scam Ke? </title>
+        <link rel="stylesheet" href="popup.css"/>
+    </head>
+    <body>
+        <div class="popup safe">
+            <div class="shield"> 🛡️ </div>
+            <h1> Ni Scam Ke? </h1>
+
+            <p class="status"> This site is not a scam!</p>
+
+            <div class="info-box">
+                <p><strong>Status:</strong> Safe page </p>
+                <p><strong>Overall Risk Level:</strong> Low</p>
             </div>
+
+            <button> Scan Again </button>
         </div>
-        <button id="diagnosticBtn" class="action-btn">System Diagnostic</button>
-    </div>
-    <script src="popup.js"></script>
-</body>
+
+        <div class="popup danger">
+            <div class="shield"> ⚠️ </div>
+
+            <h1> Ni Scam Ke? </h1>
+
+            <p class="status"> This site is suspicious!</p>
+
+            <div class="info-box">
+                <p><strong>Status:</strong> Dangerous page! </p>
+                <p><strong>Overall Risk Level:</strong> High</p>
+            </div>
+
+            <button> Scan Again </button>
+        </div>
+    </body>
 </html>
