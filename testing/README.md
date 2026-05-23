@@ -23,6 +23,18 @@ In another terminal, run:
 .\testing\run-100-scan-tests.ps1
 ```
 
+If Windows blocks PowerShell scripts, run either:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\testing\run-100-scan-tests.ps1
+```
+
+or:
+
+```cmd
+.\testing\run-100-scan-tests.bat
+```
+
 The script writes a timestamped CSV into:
 
 ```text
