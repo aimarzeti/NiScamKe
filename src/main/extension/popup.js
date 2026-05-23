@@ -1,15 +1,26 @@
 document.addEventListener("DOMContentLoaded", function () {
-    const safePopup = document.querySelector(".safe-popup");
-    const dangerPopup = document.querySelector(".danger-popup");
 
-    chrome.storage.local.get(["scamStatus", "scamType"], function (data) {
-        if (data.scamStatus === "BLOCK") {
-            safePopup.style.display = "none";
-            dangerPopup.style.display = "block";
+    const scanButton = document.getElementById("scan-btn");
 
-        } else {
-            safePopup.style.display = "block";
-            dangerPopup.style.display = "none";
-        }
+    scanButton.addEventListener("click", function () {
+
+        // UX feedback
+        scanButton.textContent = "Scanning...";
+        scanButton.disabled = true;
+
+        // Reload current tab
+        chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
+
+            chrome.tabs.reload(tabs[0].id);
+
+            // Restore button after 1.5 seconds
+            setTimeout(() => {
+                scanButton.textContent = "Scan Again";
+                scanButton.disabled = false;
+            }, 1500);
+
+        });
+
     });
+
 });
