@@ -13,10 +13,25 @@ if (-not (Test-Path -LiteralPath $TestCasesPath)) {
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 
 $testCases = Import-Csv -LiteralPath $TestCasesPath
+$totalCases = @($testCases).Count
+$caseNumber = 0
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $outputPath = Join-Path $OutputDirectory "scan-results-$timestamp.csv"
 
+Write-Host "Running $totalCases scan tests against $BaseUrl ..."
+Write-Host "Results will be saved to: $outputPath"
+
 $results = foreach ($testCase in $testCases) {
+    $caseNumber += 1
+    $percentComplete = if ($totalCases -gt 0) { [math]::Round(($caseNumber / $totalCases) * 100, 0) } else { 0 }
+
+    Write-Progress `
+        -Activity "Ni Scam Ke? 100-case scan test" `
+        -Status "Case $caseNumber/$totalCases: $($testCase.url)" `
+        -PercentComplete $percentComplete
+
+    Write-Host "[$caseNumber/$totalCases] Testing $($testCase.url)"
+
     $body = @{
         url = $testCase.url
         pageText = $testCase.pageText
@@ -63,6 +78,8 @@ $results = foreach ($testCase in $testCases) {
         }
     }
 }
+
+Write-Progress -Activity "Ni Scam Ke? 100-case scan test" -Completed
 
 $results | Export-Csv -NoTypeInformation -LiteralPath $outputPath
 
