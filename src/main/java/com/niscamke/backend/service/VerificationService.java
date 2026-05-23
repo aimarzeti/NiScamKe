@@ -1,5 +1,9 @@
+// VerificationService.java
+// for handling the core logic of verifying links against the scam registry and integrating with Gemini for unknown domains
+
 package com.niscamke.backend.service; 
 
+// import for working with URIs, dates, and locales
 import java.net.URI;
 import java.time.LocalDateTime;
 import java.util.Locale;
@@ -33,6 +37,7 @@ public class VerificationService {
                 .orElseGet(() -> analyzeUnknownDomain(domain, request.getPageText()));
     }
 
+    // for analyzing unknown domains using Gemini and saving any detected scams to the registry
     private VerificationResponse analyzeUnknownDomain(String domain, String pageText) {
         boolean isScam = geminiIntegrationService.analyzeWithGemini(domain, pageText);
 
@@ -52,10 +57,10 @@ public class VerificationService {
 
             return new VerificationResponse(
                     "BLOCK",
-                    "AI analysis indicates this domain may be a scam");
+                    "AI analysis indicates this domain may be a scam.\nPLEASE PROCEED WITH CAUTION.");
         }
 
-        return new VerificationResponse("ALLOW", "No scam indicators detected");
+        return new VerificationResponse("ALLOW", "No scam indicators detected for this domain.");
     }
 
     private String extractDomainName(String urlString) {
