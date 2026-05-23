@@ -36,7 +36,7 @@ public class FalsePositiveReport {
     @Column(name = "domain_name", nullable = false, length = 255)
     private String domainName;
 
-    @Column(name = "decision_id", length = 36)
+    @Column(name = "decision_id", length = 80)
     private String decisionId;
 
     @Column(name = "reporter_email", length = 255)

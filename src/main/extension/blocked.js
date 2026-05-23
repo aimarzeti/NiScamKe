@@ -26,6 +26,15 @@ function formatPercent(value) {
     return `${Math.round(numeric * 100)}%`;
 }
 
+async function readErrorMessage(response) {
+    try {
+        const data = await response.json();
+        return data.message || data.error || `Request failed with status ${response.status}.`;
+    } catch (error) {
+        return `Request failed with status ${response.status}.`;
+    }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     const params = new URLSearchParams(window.location.search);
     const originalUrl = params.get("blocked") || "";
@@ -141,14 +150,14 @@ document.addEventListener("DOMContentLoaded", () => {
             });
 
             if (!response.ok) {
-                throw new Error(`Request failed with status ${response.status}`);
+                throw new Error(await readErrorMessage(response));
             }
 
             const data = await response.json();
             reportStatus.textContent = data.message || "Thanks. Your review request was submitted.";
             falsePositiveForm.reset();
         } catch (error) {
-            reportStatus.textContent = "Could not submit review right now. Please try again when backend is online.";
+            reportStatus.textContent = `Could not submit review right now. ${error.message}`;
         } finally {
             reportButton.disabled = false;
             reportButton.textContent = "Submit review request";
