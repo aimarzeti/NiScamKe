@@ -9,61 +9,69 @@
 <body>
     <main class="container">
         <section class="warning-card">
+            <div class="language-row">
+                <label for="languageSelect" id="languageLabel">Bahasa</label>
+                <select id="languageSelect">
+                    <option value="ms">Bahasa Melayu</option>
+                    <option value="en">English</option>
+                </select>
+            </div>
+
             <p class="risk-pill" id="riskPill">High Risk</p>
-            <h1>Potential scam blocked</h1>
+            <h1 id="pageTitle">Potensi scam disekat</h1>
             <p class="subtitle" id="summaryLine">
                 Laman ini kelihatan mencurigakan. We paused it before you entered passwords, OTPs, or banking details.
             </p>
 
             <section class="meta-grid">
                 <div class="meta-item">
-                    <p class="meta-label">Blocked URL</p>
+                    <p class="meta-label" id="blockedUrlLabel">URL disekat</p>
                     <p class="meta-value" id="blockedUrl">-</p>
                 </div>
                 <div class="meta-item">
-                    <p class="meta-label">Decision ID</p>
+                    <p class="meta-label" id="decisionIdLabel">ID keputusan</p>
                     <p class="meta-value" id="decisionId">-</p>
                 </div>
                 <div class="meta-item">
-                    <p class="meta-label">Risk Score</p>
+                    <p class="meta-label" id="riskScoreLabel">Skor risiko</p>
                     <div class="risk-meter">
                         <span id="riskFill"></span>
                     </div>
                     <p class="meta-value" id="riskScore">-</p>
                 </div>
                 <div class="meta-item">
-                    <p class="meta-label">Confidence</p>
+                    <p class="meta-label" id="confidenceLabel">Keyakinan</p>
                     <p class="meta-value" id="confidence">-</p>
                 </div>
             </section>
 
             <section class="risk-box">
-                <h2>Why this was flagged</h2>
+                <h2 id="whyTitle">Sebab laman ini ditanda</h2>
                 <ul id="reasonsList">
                     <li>Suspicious link structure detected.</li>
                 </ul>
                 <p class="evidence" id="sourceLine"></p>
             </section>
 
-            <p class="privacy-note">
+            <p class="privacy-note" id="privacyNote">
                 Ni Scam Ke? will never ask for your password, OTP, PIN, or full card details. If you continue, you accept the risk yourself.
             </p>
 
             <div class="actions">
-                <button class="primary-btn" id="goBackButton">Go to safety</button>
-                <button class="secondary-btn" id="continueButton">Continue anyway</button>
+                <button class="primary-btn" id="goBackButton">Kembali selamat</button>
+                <button class="secondary-btn" id="continueButton">Teruskan juga</button>
             </div>
 
             <details class="false-positive">
-                <summary>This looks wrong? Report false positive</summary>
+                <summary id="falsePositiveSummary">Keputusan ini salah? Laporkan false positive</summary>
                 <form id="falsePositiveForm">
-                    <label for="reporterEmail">Email (optional)</label>
+                    <label for="reporterEmail" id="emailLabel">E-mel (pilihan)</label>
                     <input type="email" id="reporterEmail" placeholder="you@example.com" />
 
-                    <label for="reportReason">Why this is likely safe</label>
-                    <textarea id="reportReason" rows="3" placeholder="For example: This is my official company login domain."></textarea>
+                    <label for="reportReason" id="reportReasonLabel">Mengapa laman ini mungkin selamat</label>
+                    <textarea id="reportReason" rows="3" placeholder="Contoh: Ini domain rasmi organisasi saya."></textarea>
 
-                    <button type="submit" class="report-btn" id="reportButton">Submit review request</button>
+                    <button type="submit" class="report-btn" id="reportButton">Hantar semakan</button>
                     <p class="report-status" id="reportStatus"></p>
                 </form>
             </details>

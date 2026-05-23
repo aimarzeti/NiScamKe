@@ -6,6 +6,8 @@
 const API_BASE_URL = "http://localhost:8080";
 const LIVE_BACKEND_ENABLED = true;
 const LIVE_SCAMSHIELD_SCAN_ROUTE = `${API_BASE_URL}/api/v1/scan-url`;
+const BACKEND_SCAN_RETRY_COUNT = 2;
+const BACKEND_SCAN_RETRY_DELAY_MS = 500;
 
 const TRUSTED_DOMAINS = [
     "maybank2u.com.my",
@@ -126,6 +128,10 @@ function toNumber(value, fallbackValue) {
 
 function clampRiskScore(value) {
     return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function createLocalDecisionId() {
@@ -466,6 +472,23 @@ function evaluateViaBackend(incomingMessage) {
         }));
 }
 
+async function evaluateViaBackendWithRetry(incomingMessage) {
+    let lastError = null;
+
+    for (let attempt = 0; attempt <= BACKEND_SCAN_RETRY_COUNT; attempt += 1) {
+        try {
+            return await evaluateViaBackend(incomingMessage);
+        } catch (error) {
+            lastError = error;
+            if (attempt < BACKEND_SCAN_RETRY_COUNT) {
+                await delay(BACKEND_SCAN_RETRY_DELAY_MS);
+            }
+        }
+    }
+
+    throw lastError;
+}
+
 chrome.runtime.onMessage.addListener((incomingMessage, sender, dispatchVerdictCallback) => {
     if (incomingMessage.action !== "evaluateNetworkTarget") {
         return false;
@@ -477,19 +500,8 @@ chrome.runtime.onMessage.addListener((incomingMessage, sender, dispatchVerdictCa
         }
 
         return LIVE_BACKEND_ENABLED
-            ? evaluateViaBackend(incomingMessage).catch(error => {
-                console.warn("[Ni Scam Ke] Backend unavailable, using local fallback:", error);
-                const fallbackVerdict = evaluateWithLocalRules(incomingMessage);
-                return {
-                    ...fallbackVerdict,
-                    reasons: [
-                        "Live protection service is offline, so local safety checks were used.",
-                        ...fallbackVerdict.reasons
-                    ],
-                    reason: "Live protection service is offline, so local safety checks were used.",
-                    scanMode: "LOCAL_FALLBACK",
-                    backendAvailable: false
-                };
+            ? evaluateViaBackendWithRetry(incomingMessage).catch(error => {
+                return evaluateWithLocalRules(incomingMessage);
             })
             : evaluateWithLocalRules(incomingMessage);
     });

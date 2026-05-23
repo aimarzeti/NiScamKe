@@ -1,4 +1,131 @@
 const API_BASE_URL = "http://localhost:8080";
+const DEFAULT_LANGUAGE = "ms";
+
+const UI_COPY = {
+    ms: {
+        languageLabel: "Bahasa",
+        pageTitle: "Potensi scam disekat",
+        blockedUrlLabel: "URL disekat",
+        decisionIdLabel: "ID keputusan",
+        riskScoreLabel: "Skor risiko",
+        confidenceLabel: "Keyakinan",
+        whyTitle: "Sebab laman ini ditanda",
+        privacyNote: "Ni Scam Ke? tidak akan meminta kata laluan, OTP, PIN, atau butiran kad penuh. Jika anda teruskan, anda menerima risiko sendiri.",
+        goBackButton: "Kembali selamat",
+        continueButton: "Teruskan juga",
+        openingRisk: "Membuka atas risiko sendiri...",
+        falsePositiveSummary: "Keputusan ini salah? Laporkan false positive",
+        emailLabel: "E-mel (pilihan)",
+        reportReasonLabel: "Mengapa laman ini mungkin selamat",
+        reportPlaceholder: "Contoh: Ini domain rasmi organisasi saya.",
+        reportButton: "Hantar semakan",
+        submitting: "Sedang menghantar...",
+        defaultReportReason: "Pengguna percaya laman ini sah.",
+        submitted: "Terima kasih. Permintaan semakan anda telah dihantar.",
+        submitFailed: "Tidak dapat menghantar semakan sekarang. Sila cuba lagi apabila backend aktif.",
+        evidenceSource: "Sumber bukti",
+        unknownUrl: "URL tidak diketahui",
+        riskLabels: {
+            high: "Risiko tinggi",
+            medium: "Risiko sederhana",
+            low: "Risiko rendah"
+        }
+    },
+    en: {
+        languageLabel: "Language",
+        pageTitle: "Potential scam blocked",
+        blockedUrlLabel: "Blocked URL",
+        decisionIdLabel: "Decision ID",
+        riskScoreLabel: "Risk score",
+        confidenceLabel: "Confidence",
+        whyTitle: "Why this was flagged",
+        privacyNote: "Ni Scam Ke? will never ask for your password, OTP, PIN, or full card details. If you continue, you accept the risk yourself.",
+        goBackButton: "Go to safety",
+        continueButton: "Continue anyway",
+        openingRisk: "Opening at your own risk...",
+        falsePositiveSummary: "This looks wrong? Report false positive",
+        emailLabel: "Email (optional)",
+        reportReasonLabel: "Why this is likely safe",
+        reportPlaceholder: "For example: This is my official company login domain.",
+        reportButton: "Submit review request",
+        submitting: "Submitting...",
+        defaultReportReason: "User believes this site is legitimate.",
+        submitted: "Thanks. Your review request was submitted.",
+        submitFailed: "Could not submit review right now. Please try again when backend is online.",
+        evidenceSource: "Evidence source",
+        unknownUrl: "Unknown URL",
+        riskLabels: {
+            high: "High Risk",
+            medium: "Medium Risk",
+            low: "Low Risk"
+        }
+    }
+};
+
+const LOCAL_TRANSLATIONS = {
+    ms: {
+        "Potential phishing behavior detected.": "Tingkah laku phishing berpotensi dikesan.",
+        "Suspicious signals detected by the scan engine.": "Isyarat mencurigakan dikesan oleh enjin imbasan.",
+        "This looks like a free-aid or free-device application scam.": "Ini kelihatan seperti scam permohonan bantuan atau peranti percuma.",
+        "The page combines typo-filled application text with Telegram or personal-detail collection.": "Laman ini menggabungkan teks permohonan yang banyak kesilapan dengan kutipan Telegram atau maklumat peribadi.",
+        "This page offers free aid or devices while collecting contact details on an untrusted domain.": "Laman ini menawarkan bantuan atau peranti percuma sambil mengutip maklumat hubungan pada domain tidak dipercayai.",
+        "Telegram-based application flows are a common scam pattern.": "Aliran permohonan melalui Telegram ialah corak scam yang biasa.",
+        "AI phishing analysis flagged suspicious signals.": "Analisis AI phishing menanda isyarat mencurigakan."
+    },
+    en: {}
+};
+
+const translationCache = new Map();
+let languageRenderSequence = 0;
+
+function getCopy(language) {
+    return UI_COPY[language] || UI_COPY[DEFAULT_LANGUAGE];
+}
+
+function translateLocally(text, language) {
+    return LOCAL_TRANSLATIONS[language]?.[text] || text;
+}
+
+async function translateWithAi(text, language) {
+    if (!text || language === "en") {
+        return text;
+    }
+
+    const localTranslation = translateLocally(text, language);
+    if (localTranslation !== text) {
+        return localTranslation;
+    }
+
+    const cacheKey = `${language}:${text}`;
+    if (translationCache.has(cacheKey)) {
+        return translationCache.get(cacheKey);
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 600);
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/v1/translate-ui`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text, targetLanguage: language }),
+            signal: controller.signal
+        });
+
+        if (!response.ok) {
+            return text;
+        }
+
+        const data = await response.json();
+        const translated = data.translatedText || text;
+        translationCache.set(cacheKey, translated);
+        return translated;
+    } catch (error) {
+        return text;
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
 
 function decodeReasons(rawReasons, fallbackReason) {
     if (!rawReasons) {
@@ -46,24 +173,64 @@ document.addEventListener("DOMContentLoaded", () => {
     const riskPillEl = document.getElementById("riskPill");
     const sourceLineEl = document.getElementById("sourceLine");
 
-    blockedUrlEl.textContent = originalUrl || "Unknown URL";
     decisionIdEl.textContent = decisionId;
-    summaryLineEl.textContent = reason;
 
     const safeRiskScore = Number.isFinite(riskScore) ? Math.max(0, Math.min(100, riskScore)) : 85;
     riskScoreEl.textContent = `${safeRiskScore}/100`;
     confidenceEl.textContent = formatPercent(confidence);
     riskFillEl.style.width = `${safeRiskScore}%`;
-    sourceLineEl.textContent = `Evidence source: ${evidenceSources}`;
+    async function applyLanguage(language) {
+        const currentRender = ++languageRenderSequence;
+        const ui = getCopy(language);
+        document.documentElement.lang = language === "en" ? "en" : "ms";
+        document.getElementById("languageSelect").value = language;
+        document.getElementById("languageLabel").textContent = ui.languageLabel;
+        document.getElementById("pageTitle").textContent = ui.pageTitle;
+        document.getElementById("blockedUrlLabel").textContent = ui.blockedUrlLabel;
+        document.getElementById("decisionIdLabel").textContent = ui.decisionIdLabel;
+        document.getElementById("riskScoreLabel").textContent = ui.riskScoreLabel;
+        document.getElementById("confidenceLabel").textContent = ui.confidenceLabel;
+        document.getElementById("whyTitle").textContent = ui.whyTitle;
+        document.getElementById("privacyNote").textContent = ui.privacyNote;
+        document.getElementById("goBackButton").textContent = ui.goBackButton;
+        document.getElementById("continueButton").textContent = ui.continueButton;
+        document.getElementById("falsePositiveSummary").textContent = ui.falsePositiveSummary;
+        document.getElementById("emailLabel").textContent = ui.emailLabel;
+        document.getElementById("reportReasonLabel").textContent = ui.reportReasonLabel;
+        document.getElementById("reportReason").placeholder = ui.reportPlaceholder;
+        document.getElementById("reportButton").textContent = ui.reportButton;
+        blockedUrlEl.textContent = originalUrl || ui.unknownUrl;
+        const translatedSummary = await translateWithAi(reason, language);
+        const translatedReasons = await Promise.all(reasons.map(text => translateWithAi(text, language)));
 
-    const riskLabel = safeRiskScore >= 80 ? "High Risk" : safeRiskScore >= 50 ? "Medium Risk" : "Low Risk";
-    riskPillEl.textContent = riskLabel;
+        if (currentRender !== languageRenderSequence) {
+            return;
+        }
 
-    reasonsListEl.innerHTML = "";
-    reasons.forEach(text => {
-        const item = document.createElement("li");
-        item.textContent = text;
-        reasonsListEl.appendChild(item);
+        summaryLineEl.textContent = translatedSummary;
+        sourceLineEl.textContent = `${ui.evidenceSource}: ${evidenceSources}`;
+
+        riskPillEl.textContent = safeRiskScore >= 80
+            ? ui.riskLabels.high
+            : safeRiskScore >= 50
+                ? ui.riskLabels.medium
+                : ui.riskLabels.low;
+
+        reasonsListEl.innerHTML = "";
+        for (const text of translatedReasons) {
+            const item = document.createElement("li");
+            item.textContent = text;
+            reasonsListEl.appendChild(item);
+        }
+    }
+
+    chrome.storage.local.get(["uiLanguage"], data => {
+        applyLanguage(data.uiLanguage || DEFAULT_LANGUAGE);
+    });
+
+    document.getElementById("languageSelect").addEventListener("change", event => {
+        const language = event.target.value || DEFAULT_LANGUAGE;
+        chrome.storage.local.set({ uiLanguage: language }, () => applyLanguage(language));
     });
 
     const goBackButton = document.getElementById("goBackButton");
@@ -85,7 +252,8 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         continueCompleted = true;
-        continueButton.textContent = "Opening at your own risk...";
+        const selectedLanguage = document.getElementById("languageSelect").value || DEFAULT_LANGUAGE;
+        continueButton.textContent = getCopy(selectedLanguage).openingRisk;
         continueButton.disabled = true;
 
         if (!originalUrl) {
@@ -120,10 +288,12 @@ document.addEventListener("DOMContentLoaded", () => {
         event.preventDefault();
 
         const reporterEmail = document.getElementById("reporterEmail").value.trim();
-        const reportReason = document.getElementById("reportReason").value.trim() || "User believes this site is legitimate.";
+        const selectedLanguage = document.getElementById("languageSelect").value || DEFAULT_LANGUAGE;
+        const ui = getCopy(selectedLanguage);
+        const reportReason = document.getElementById("reportReason").value.trim() || ui.defaultReportReason;
 
         reportButton.disabled = true;
-        reportButton.textContent = "Submitting...";
+        reportButton.textContent = ui.submitting;
         reportStatus.textContent = "";
 
         try {
@@ -145,13 +315,13 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             const data = await response.json();
-            reportStatus.textContent = data.message || "Thanks. Your review request was submitted.";
+            reportStatus.textContent = selectedLanguage === "ms" ? ui.submitted : data.message || ui.submitted;
             falsePositiveForm.reset();
         } catch (error) {
-            reportStatus.textContent = "Could not submit review right now. Please try again when backend is online.";
+            reportStatus.textContent = ui.submitFailed;
         } finally {
             reportButton.disabled = false;
-            reportButton.textContent = "Submit review request";
+            reportButton.textContent = ui.reportButton;
         }
     });
 });

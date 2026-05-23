@@ -14,6 +14,7 @@ import com.niscamke.backend.controller.LinkVerificationController.ScanRequest;
 import com.niscamke.backend.controller.LinkVerificationController.ScanResponse;
 import com.niscamke.backend.controller.LinkVerificationController.VerificationRequest;
 import com.niscamke.backend.controller.LinkVerificationController.VerificationResponse;
+import com.niscamke.backend.service.GeminiIntegrationService.GeminiAnalysis;
 import com.niscamke.backend.model.DecisionLog;
 import com.niscamke.backend.model.FalsePositiveReport;
 import com.niscamke.backend.model.ScamRegistry;
@@ -87,7 +88,12 @@ public class VerificationService {
 
         int structuralRisk = geminiIntegrationService.assessStructuralRisk(domain, request.getPageText());
         boolean knownScam = scamRegistryRepository.findByDomainName(domain).isPresent();
-        boolean aiScam = knownScam || geminiIntegrationService.analyzeWithGemini(domain, request.getPageText());
+        GeminiAnalysis geminiAnalysis = knownScam
+                ? new GeminiAnalysis(true, List.of(
+                        "Why flagged: This domain is already listed in the community scam registry.",
+                        "Modus operandi: Previously reported scam domains are commonly reused to collect credentials, OTPs, payments, or personal contact details."))
+                : geminiIntegrationService.analyzeWithGeminiDetails(domain, request.getPageText());
+        boolean aiScam = knownScam || geminiAnalysis.scam();
 
         int riskScore = knownScam ? 95 : structuralRisk;
         if (!knownScam && aiScam) {
@@ -100,10 +106,18 @@ public class VerificationService {
         String decision = riskScore >= 80 ? "BLOCK" : (riskScore >= 50 ? "WARN" : "ALLOW");
         double confidence = riskScore >= 80 ? 0.95 : (riskScore >= 50 ? 0.75 : 0.92);
 
+        List<String> reasons = geminiAnalysis.reasons().isEmpty()
+                ? List.of(knownScam
+                        ? "Known scam domain from community intelligence."
+                        : aiScam
+                        ? "AI phishing analysis flagged suspicious signals."
+                        : "No significant phishing indicators detected.")
+                : geminiAnalysis.reasons();
+
         String reason = knownScam
                 ? "Known scam domain from community intelligence."
                 : aiScam
-                ? "AI phishing analysis flagged suspicious signals."
+                ? reasons.get(0)
                 : "No significant phishing indicators detected.";
 
         String evidenceSources = knownScam ? "COMMUNITY_DB,RULE_ENGINE" : aiScam ? "AI_MODEL,RULE_ENGINE" : "RULE_ENGINE";
@@ -122,7 +136,7 @@ public class VerificationService {
             saveToRegistry(domain);
         }
 
-        return mapLogToScanResponse(decisionLog, decision, List.of(reason), 300);
+        return mapLogToScanResponse(decisionLog, decision, reasons, 300);
     }
 
     public Optional<DecisionLog> findDecisionByPublicId(String decisionId) {

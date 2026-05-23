@@ -1,6 +1,7 @@
 package com.niscamke.backend.service;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -81,83 +82,70 @@ public class GeminiIntegrationService {
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    public record GeminiAnalysis(boolean scam, List<String> reasons) {
+    }
+
     public boolean analyzeWithGemini(String domain, String pageText) {
+        return analyzeWithGeminiDetails(domain, pageText).scam();
+    }
+
+    public GeminiAnalysis analyzeWithGeminiDetails(String domain, String pageText) {
         String normalizedDomain = domain == null ? "" : domain.toLowerCase(Locale.ROOT);
-
         int structuralRisk = calculateStructuralRisk(normalizedDomain, pageText);
-        if (structuralRisk >= 40) {
-            System.out.println("[ScamShield Fast-Path] Structural bank mimic detected. Hard-blocking threat.");
-            return true;
-        }
 
-        // 2. Fallback to Live AI Analysis (Google Gemini API call)
         if (apiKey == null || apiKey.isBlank()) {
             System.err.println("[ScamShield Warning] Missing Gemini API key parameter config.");
-            return false;
+            return buildRuleBasedAnalysis(structuralRisk);
         }
 
         try {
             String targetUrlEndpoint = GEMINI_API_URL + apiKey;
-
-            // Enhanced system instruction: stronger prompt for consistent phishing detection
-            String systemInstructionPrompt = 
+            String systemInstructionPrompt =
                 "You are a cybersecurity expert specializing in phishing and scam detection. " +
                 "Analyze the following domain and page content for signs of phishing, impersonation, or scam. " +
-                "Consider: domain spoofing (similar to legitimate banks), typosquatting, misspelled brand names, typo-filled credential requests, fake login forms, suspicious URLs, urgency tactics, requests for credentials, free-aid or free-device bait, Telegram/WhatsApp contact collection, and application pages with obvious typos such as aplly. " +
-                "If the domain or page text appears to imitate a bank with small spelling changes, or offers free aid/devices while collecting contact details through typo-filled forms, mark it as SCAM. " +
-                "Respond with ONLY a single word: SCAM or SAFE. No punctuation, no explanation, no extra text.";
+                "Consider domain spoofing, typosquatting, misspelled brand names, typo-filled forms, fake login forms, suspicious URLs, urgency, credential requests, free-aid or free-device bait, Telegram/WhatsApp contact collection, and application typos such as aplly. " +
+                "Respond with compact JSON only, no markdown, using this schema: " +
+                "{\"verdict\":\"SCAM or SAFE\",\"whyFlagged\":\"one sentence explaining the strongest evidence\",\"modusOperandi\":\"one sentence explaining how the scam works\"}.";
 
             String analyticalPayload = String.format(
-                "Domain: %s\nPage Text: %s",
+                "Domain: %s\nStructural risk score: %d/100\nPage Text: %s",
                 normalizedDomain,
+                structuralRisk,
                 (pageText != null && pageText.length() > 800) ? pageText.substring(0, 800) : pageText
             );
 
-            // ✅ Proper Gemini request structure
             Map<String, Object> requestBodyMap = new HashMap<>();
-
-            // System instruction as separate field
             Map<String, Object> systemInstruction = new HashMap<>();
-            systemInstruction.put("parts", Collections.singletonList(
-                Map.of("text", systemInstructionPrompt)
-            ));
+            systemInstruction.put("parts", Collections.singletonList(Map.of("text", systemInstructionPrompt)));
             requestBodyMap.put("systemInstruction", systemInstruction);
-
-            // User content
-            Map<String, Object> userContent = Map.of(
+            requestBodyMap.put("contents", Collections.singletonList(Map.of(
                 "role", "user",
                 "parts", Collections.singletonList(Map.of("text", analyticalPayload))
-            );
-            requestBodyMap.put("contents", Collections.singletonList(userContent));
-
-            // Force deterministic output: low temperature for consistency, small max tokens
+            )));
             requestBodyMap.put("generationConfig", Map.of(
                 "temperature", 0.0,
-                "maxOutputTokens", 10
+                "maxOutputTokens", 260
             ));
 
-            // Set content headers
             HttpHeaders standardHeaders = new HttpHeaders();
             standardHeaders.setContentType(MediaType.APPLICATION_JSON);
             HttpEntity<Map<String, Object>> outboundHttpRequestEntity = new HttpEntity<>(requestBodyMap, standardHeaders);
-
-            // Send live POST request to Google Cloud
             ResponseEntity<String> externalServiceApiResponse = restTemplate.postForEntity(targetUrlEndpoint, outboundHttpRequestEntity, String.class);
 
-            // Parse response body if request is successful (HTTP 200)
             if (externalServiceApiResponse.getStatusCode() == HttpStatus.OK && externalServiceApiResponse.getBody() != null) {
-                return parseGeminiResponse(externalServiceApiResponse.getBody());
+                GeminiAnalysis analysis = parseGeminiAnalysisResponse(externalServiceApiResponse.getBody(), structuralRisk);
+                if (!analysis.reasons().isEmpty()) {
+                    return analysis;
+                }
             } else {
                 System.err.println("[ScamShield] Unexpected HTTP status: " + externalServiceApiResponse.getStatusCode());
             }
-
         } catch (RestClientException e) {
             System.err.println("[ScamShield System Fault] Gemini API Connection Error: " + e.getMessage());
         }
 
-        return false;
+        return buildRuleBasedAnalysis(structuralRisk);
     }
-
     /**
      * Robust Gemini response parser with edge case handling.
      * Handles missing nodes, null values, extra whitespace, and punctuation.
@@ -234,9 +222,118 @@ public class GeminiIntegrationService {
         }
     }
 
+    private GeminiAnalysis parseGeminiAnalysisResponse(String responseBody, int structuralRisk) {
+        try {
+            String rawOutput = extractGeminiText(responseBody);
+            if (rawOutput.isBlank()) {
+                return new GeminiAnalysis(structuralRisk >= 40, List.of());
+            }
+
+            String cleanedOutput = rawOutput
+                    .replaceAll("(?i)^```json\\s*", "")
+                    .replaceAll("(?i)^```\\s*", "")
+                    .replaceAll("\\s*```$", "")
+                    .trim();
+
+            JsonNode analysisNode = objectMapper.readTree(cleanedOutput);
+            String verdict = analysisNode.path("verdict").asText("").trim().toUpperCase(Locale.ROOT);
+            String whyFlagged = analysisNode.path("whyFlagged").asText("").trim();
+            String modusOperandi = analysisNode.path("modusOperandi").asText("").trim();
+            boolean scam = "SCAM".equals(verdict) || structuralRisk >= 40;
+
+            List<String> reasons = new ArrayList<>();
+            if (!whyFlagged.isBlank()) {
+                reasons.add("Why flagged: " + whyFlagged);
+            }
+            if (!modusOperandi.isBlank()) {
+                reasons.add("Modus operandi: " + modusOperandi);
+            }
+
+            return new GeminiAnalysis(scam, reasons);
+        } catch (IOException e) {
+            System.err.println("[ScamShield Parser] Error parsing Gemini analysis response: " + e.getMessage());
+            return new GeminiAnalysis(structuralRisk >= 40, List.of());
+        }
+    }
+
+    private GeminiAnalysis buildRuleBasedAnalysis(int structuralRisk) {
+        if (structuralRisk >= 80) {
+            return new GeminiAnalysis(true, List.of(
+                    "Why flagged: The site combines high-risk scam signals such as suspicious domain wording, free-aid or device bait, typo-heavy text, or personal-contact collection.",
+                    "Modus operandi: The page appears designed to lure users into submitting personal details or messaging an operator before the scammer requests more sensitive information."
+            ));
+        }
+
+        if (structuralRisk >= 50) {
+            return new GeminiAnalysis(false, List.of(
+                    "Why flagged: Some suspicious signals were detected, but the evidence is not strong enough for a full block.",
+                    "Modus operandi: Scammers often use this pattern to build trust before asking for credentials, OTPs, or contact details."
+            ));
+        }
+
+        return new GeminiAnalysis(false, List.of(
+                "Why flagged: No major scam indicators were detected in the available URL and page text.",
+                "Modus operandi: No clear scam workflow was identified from the scanned content."
+        ));
+    }
+
     public int assessStructuralRisk(String domain, String pageText) {
         String normalizedDomain = domain == null ? "" : domain.toLowerCase(Locale.ROOT);
         return calculateStructuralRisk(normalizedDomain, pageText);
+    }
+
+    public String translateUiText(String text, String targetLanguage) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+
+        String normalizedLanguage = targetLanguage == null ? "ms" : targetLanguage.toLowerCase(Locale.ROOT);
+        String languageName = normalizedLanguage.startsWith("en") ? "English" : "Malay";
+
+        if (apiKey == null || apiKey.isBlank()) {
+            return text;
+        }
+
+        try {
+            String targetUrlEndpoint = GEMINI_API_URL + apiKey;
+            String systemInstructionPrompt =
+                "You translate browser safety UI copy for a Malaysian anti-scam extension. " +
+                "Translate the user's text into " + languageName + ". Keep cybersecurity meaning accurate, concise, and natural. " +
+                "Do not add explanations. Return only the translated text.";
+
+            Map<String, Object> requestBodyMap = new HashMap<>();
+            Map<String, Object> systemInstruction = new HashMap<>();
+            systemInstruction.put("parts", Collections.singletonList(Map.of("text", systemInstructionPrompt)));
+            requestBodyMap.put("systemInstruction", systemInstruction);
+            requestBodyMap.put("contents", Collections.singletonList(Map.of(
+                "role", "user",
+                "parts", Collections.singletonList(Map.of("text", text.length() > 700 ? text.substring(0, 700) : text))
+            )));
+            requestBodyMap.put("generationConfig", Map.of(
+                "temperature", 0.1,
+                "maxOutputTokens", 140
+            ));
+
+            HttpHeaders standardHeaders = new HttpHeaders();
+            standardHeaders.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> outboundHttpRequestEntity = new HttpEntity<>(requestBodyMap, standardHeaders);
+            ResponseEntity<String> externalServiceApiResponse = restTemplate.postForEntity(targetUrlEndpoint, outboundHttpRequestEntity, String.class);
+
+            if (externalServiceApiResponse.getStatusCode() == HttpStatus.OK && externalServiceApiResponse.getBody() != null) {
+                String translated = extractGeminiText(externalServiceApiResponse.getBody());
+                return translated.isBlank() ? text : translated;
+            }
+        } catch (RestClientException | IOException e) {
+            System.err.println("[ScamShield Translation] Gemini translation unavailable: " + e.getMessage());
+        }
+
+        return text;
+    }
+
+    private String extractGeminiText(String responseBody) throws IOException {
+        JsonNode parsedRootNode = objectMapper.readTree(responseBody);
+        JsonNode textNode = parsedRootNode.path("candidates").path(0).path("content").path("parts").path(0).path("text");
+        return textNode.isMissingNode() || textNode.isNull() ? "" : textNode.asText().trim();
     }
 
     private int calculateStructuralRisk(String normalizedDomain, String pageText) {
@@ -400,3 +497,4 @@ public class GeminiIntegrationService {
         System.out.println("[ScamShield Init] Gemini API endpoint target configured: " + fullUrl);
     }
 }
+

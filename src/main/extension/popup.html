@@ -9,6 +9,14 @@
 <body>
     <main class="popup-shell" aria-live="polite">
         <section class="hero-card">
+            <div class="language-row">
+                <label for="languageSelect" id="languageLabel">Bahasa</label>
+                <select id="languageSelect">
+                    <option value="ms">Bahasa Melayu</option>
+                    <option value="en">English</option>
+                </select>
+            </div>
+
             <div class="brand-row">
                 <div class="brand-mark" aria-hidden="true">NSK</div>
                 <div>
@@ -23,7 +31,7 @@
 
             <div class="risk-panel" id="riskPanel">
                 <div>
-                    <span class="label">Risk score</span>
+                    <span class="label" id="riskScoreLabel">Skor risiko</span>
                     <strong id="riskScore">--/100</strong>
                 </div>
                 <div class="meter" aria-hidden="true">
@@ -33,33 +41,33 @@
 
             <dl class="details-grid">
                 <div>
-                    <dt>Status</dt>
+                    <dt id="statusLabel">Status</dt>
                     <dd id="decisionLabel">Waiting</dd>
                 </div>
                 <div>
-                    <dt>Confidence</dt>
+                    <dt id="confidenceTitle">Keyakinan</dt>
                     <dd id="confidenceLabel">--</dd>
                 </div>
                 <div>
-                    <dt>Mode</dt>
+                    <dt id="modeTitle">Mod</dt>
                     <dd id="modeLabel">Not scanned</dd>
                 </div>
                 <div>
-                    <dt>Domain</dt>
+                    <dt id="domainTitle">Domain</dt>
                     <dd id="domainLabel">Current tab</dd>
                 </div>
             </dl>
 
             <div class="reason-box">
-                <span class="label">Why</span>
+                <span class="label" id="whyLabel">Sebab</span>
                 <p id="reasonText">Open a page or scan again to refresh protection status.</p>
             </div>
 
-            <p class="privacy-note">
+            <p class="privacy-note" id="privacyNote">
                 Privacy note: Ni Scam Ke? never asks for passwords, OTPs, or banking credentials.
             </p>
 
-            <button id="scanButton" type="button">Scan Current Page</button>
+            <button id="scanButton" type="button">Imbas Laman Ini</button>
         </section>
     </main>
 
