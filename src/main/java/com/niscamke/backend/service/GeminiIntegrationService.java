@@ -107,7 +107,7 @@ public class GeminiIntegrationService {
     }
 
     public void connectToGemini() {
-        String fullUrl = GEMINI_API_URL + apiKey;
-        System.out.println("[ScamShield Init] Gemini API endpoint target configured.");
+        String fullUrl = GEMINI_API_URL + (apiKey == null ? "<missing-key>" : apiKey);
+        System.out.println("[ScamShield Init] Gemini API endpoint target configured: " + fullUrl);
     }
 }
