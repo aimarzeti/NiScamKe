@@ -7,14 +7,18 @@ package com.niscamke.backend.controller;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.niscamke.backend.model.DecisionLog;
+import com.niscamke.backend.model.FalsePositiveReport;
 import com.niscamke.backend.service.VerificationService;
+import com.niscamke.backend.service.VerificationService.SummaryResponse;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -71,12 +75,46 @@ public class LinkVerificationController {
         return ResponseEntity.ok(new ReportResponse("RECEIVED", "Report submitted and queued for trust review."));
     }
 
+    @PostMapping("/false-positive")
+    public ResponseEntity<ReportResponse> reportFalsePositive(@RequestBody FalsePositiveRequest request) {
+        String message = verificationService.submitFalsePositiveReport(
+                request.getUrl(),
+                request.getReporterEmail(),
+                request.getDecisionId(),
+                request.getReason());
+        return ResponseEntity.ok(new ReportResponse("RECEIVED", message));
+    }
+
+    @GetMapping("/false-positive")
+    public ResponseEntity<java.util.List<FalsePositiveResponse>> getFalsePositiveReports(
+            @RequestParam(value = "status", required = false) String status) {
+        java.util.List<FalsePositiveResponse> responses = verificationService.getFalsePositiveReports(status).stream()
+                .map(this::mapFalsePositiveResponse)
+                .toList();
+        return ResponseEntity.ok(responses);
+    }
+
+    @PatchMapping("/false-positive/{id}/status")
+    public ResponseEntity<FalsePositiveResponse> reviewFalsePositive(
+            @PathVariable("id") Long id,
+            @RequestBody FalsePositiveReviewRequest request) {
+        return verificationService.reviewFalsePositiveReport(id, request.getStatus(), request.getReviewNote())
+                .map(this::mapFalsePositiveResponse)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
     @GetMapping("/decision/{id}")
     public ResponseEntity<DecisionResponse> getDecision(@PathVariable("id") String id) {
         return verificationService.findDecisionByPublicId(id)
                 .map(this::mapDecisionResponse)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/admin/summary")
+    public ResponseEntity<SummaryResponse> getAdminSummary() {
+        return ResponseEntity.ok(verificationService.getSummary());
     }
 
     @Data
@@ -134,6 +172,40 @@ public class LinkVerificationController {
         private String createdAt;
     }
 
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class FalsePositiveRequest {
+        private String url;
+        private String decisionId;
+        private String reporterEmail;
+        private String reason;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class FalsePositiveReviewRequest {
+        private String status; // APPROVED or REJECTED
+        private String reviewNote;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class FalsePositiveResponse {
+        private Long id;
+        private String url;
+        private String domainName;
+        private String decisionId;
+        private String reporterEmail;
+        private String reason;
+        private String status;
+        private String reviewNote;
+        private String createdAt;
+        private String reviewedAt;
+    }
+
     private DecisionResponse mapDecisionResponse(DecisionLog log) {
         return new DecisionResponse(
                 log.getPublicId(),
@@ -147,8 +219,22 @@ public class LinkVerificationController {
                 log.getCreatedAt().toString());
     }
 
+    private FalsePositiveResponse mapFalsePositiveResponse(FalsePositiveReport report) {
+        return new FalsePositiveResponse(
+                report.getId(),
+                report.getUrl(),
+                report.getDomainName(),
+                report.getDecisionId(),
+                report.getReporterEmail(),
+                report.getReason(),
+                report.getStatus(),
+                report.getReviewNote(),
+                report.getCreatedAt() == null ? null : report.getCreatedAt().toString(),
+                report.getReviewedAt() == null ? null : report.getReviewedAt().toString());
+    }
+
     @GetMapping("/health")
     public ResponseEntity<String> health() {
-        return ResponseEntity.ok("NiScamKe Backend v1.0 — Protecting Malaysians 🛡️");
+        return ResponseEntity.ok("NiScamKe Backend v1.0 - Protecting Malaysians");
     }
 }

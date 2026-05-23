@@ -8,4 +8,5 @@ import com.niscamke.backend.model.DecisionLog;
 
 public interface DecisionLogRepository extends JpaRepository<DecisionLog, Long> {
     Optional<DecisionLog> findByPublicId(String publicId);
+    long countByDecision(String decision);
 }
