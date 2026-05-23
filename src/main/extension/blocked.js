@@ -1,6 +1,6 @@
 document.addEventListener("DOMContentLoaded", function () {
-    const goBackButton = document.querySelector(".primary-button");
-    const continueButton = document.querySelector(".secondary-button");
+    const goBackButton = document.querySelector(".primary-btn");
+    const continueButton = document.querySelector(".secondary-btn");
 
     goBackButton.addEventListener("click", function () {
         window.location.href = "https://www.google.com";
