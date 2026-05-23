@@ -2,8 +2,10 @@ package com.niscamke.backend.service;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -24,6 +26,16 @@ public class GeminiIntegrationService {
 
     private static final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=";
 
+    private static final List<String> BANK_KEYWORDS = List.of(
+        "bimb", "bankislam", "cimb", "maybank", "rhb", "hongleong",
+        "publicbank", "ambank", "affin", "bsn", "agro"
+    );
+
+    private static final Set<String> TRUSTED_DOMAINS = Set.of(
+        "bankislam.com.my", "cimbclicks.com.my", "maybank2u.com.my",
+        "rhbbank.com.my", "pbebank.com", "beubankislam.com.my"
+    );
+
     @Value("${gemini.api.key}")
     private String apiKey;
 
@@ -33,21 +45,21 @@ public class GeminiIntegrationService {
     public boolean analyzeWithGemini(String domain, String pageText) {
         String normalizedDomain = domain == null ? "" : domain.toLowerCase(Locale.ROOT);
 
-        // 1. Fast-Path Local Validation (Geng bank tiruan)
-        boolean targetsMalaysianBank = normalizedDomain.contains("bimb")
-                || normalizedDomain.contains("cimb")
-                || normalizedDomain.contains("maybank")
-                || normalizedDomain.contains("secure");
+        // 1. Fast-Path Local Validation (Malaysian bank mimicry detection)
+        boolean targetsMalaysianBank = BANK_KEYWORDS.stream()
+            .anyMatch(normalizedDomain::contains);
 
-        boolean trustedMalaysianDomain = normalizedDomain.endsWith(".com.my")
-                || normalizedDomain.endsWith(".my");
+        boolean trustedMalaysianDomain = TRUSTED_DOMAINS.contains(normalizedDomain)
+            || normalizedDomain.endsWith(".gov.my")
+            || normalizedDomain.endsWith(".edu.my")
+            || normalizedDomain.endsWith(".com.my");
 
         if (targetsMalaysianBank && !trustedMalaysianDomain) {
             System.out.println("[ScamShield Fast-Path] Structural bank mimic detected. Hard-blocking threat.");
-            return true; 
+            return true;
         }
 
-        // 2. Fallback to Live AI Analysis (Person 2 - Live Google Gemini Call)
+        // 2. Fallback to Live AI Analysis (Google Gemini API call)
         if (apiKey == null || apiKey.isBlank()) {
             System.err.println("[ScamShield Warning] Missing Gemini API key parameter config.");
             return false;
@@ -56,47 +68,55 @@ public class GeminiIntegrationService {
         try {
             String targetUrlEndpoint = GEMINI_API_URL + apiKey;
 
-            // System instructions to force a single-word answer from Gemini
+            // Enhanced system instruction: stronger prompt for consistent phishing detection
             String systemInstructionPrompt = 
-                "You are an expert cyber threat intelligence analyst for Be U by Bank Islam. " +
-                "Evaluate whether the following target is a phishing scam targeting consumers. " +
-                "CRITICAL DIRECTION: Your reply must be exactly a single word token: either 'SCAM' or 'SAFE'. No spaces, no markdown.";
+                "You are a cybersecurity expert specializing in phishing and scam detection. " +
+                "Analyze the following domain and page content for signs of phishing, impersonation, or scam. " +
+                "Consider: domain spoofing (similar to legitimate banks), fake login forms, suspicious URLs, urgency tactics, requests for credentials. " +
+                "Respond with ONLY a single word: SCAM or SAFE. No punctuation, no explanation, no extra text.";
 
             String analyticalPayload = String.format(
-                "Domain: %s\nText: %s",
+                "Domain: %s\nPage Text: %s",
                 normalizedDomain,
                 (pageText != null && pageText.length() > 800) ? pageText.substring(0, 800) : pageText
             );
 
-            // Constructing Google's required nested JSON body structure
+            // ✅ Proper Gemini request structure
             Map<String, Object> requestBodyMap = new HashMap<>();
-            Map<String, Object> textPart = new HashMap<>();
-            textPart.put("text", systemInstructionPrompt + "\n\n" + analyticalPayload);
-            
-            Map<String, Object> partsMap = new HashMap<>();
-            partsMap.put("parts", Collections.singletonList(textPart));
-            requestBodyMap.put("contents", Collections.singletonList(partsMap));
+
+            // System instruction as separate field
+            Map<String, Object> systemInstruction = new HashMap<>();
+            systemInstruction.put("parts", Collections.singletonList(
+                Map.of("text", systemInstructionPrompt)
+            ));
+            requestBodyMap.put("systemInstruction", systemInstruction);
+
+            // User content
+            Map<String, Object> userContent = Map.of(
+                "role", "user",
+                "parts", Collections.singletonList(Map.of("text", analyticalPayload))
+            );
+            requestBodyMap.put("contents", Collections.singletonList(userContent));
+
+            // Force deterministic output: low temperature for consistency, small max tokens
+            requestBodyMap.put("generationConfig", Map.of(
+                "temperature", 0.0,
+                "maxOutputTokens", 10
+            ));
 
             // Set content headers
             HttpHeaders standardHeaders = new HttpHeaders();
             standardHeaders.setContentType(MediaType.APPLICATION_JSON);
             HttpEntity<Map<String, Object>> outboundHttpRequestEntity = new HttpEntity<>(requestBodyMap, standardHeaders);
 
-            // Send live post request to Google Cloud
+            // Send live POST request to Google Cloud
             ResponseEntity<String> externalServiceApiResponse = restTemplate.postForEntity(targetUrlEndpoint, outboundHttpRequestEntity, String.class);
 
             // Parse response body if request is successful (HTTP 200)
             if (externalServiceApiResponse.getStatusCode() == HttpStatus.OK && externalServiceApiResponse.getBody() != null) {
-                JsonNode parsedRootNode = objectMapper.readTree(externalServiceApiResponse.getBody());
-                String structuralAiResponseOutput = parsedRootNode
-                        .path("candidates").get(0)
-                        .path("content").path("parts").get(0)
-                        .path("text").asText().trim();
-
-                System.out.println("[ScamShield Engine] Gemini response received: " + structuralAiResponseOutput);
-
-                // Return true if Gemini tags it as a SCAM
-                return "SCAM".equalsIgnoreCase(structuralAiResponseOutput);
+                return parseGeminiResponse(externalServiceApiResponse.getBody());
+            } else {
+                System.err.println("[ScamShield] Unexpected HTTP status: " + externalServiceApiResponse.getStatusCode());
             }
 
         } catch (Exception e) {
@@ -104,6 +124,82 @@ public class GeminiIntegrationService {
         }
 
         return false;
+    }
+
+    /**
+     * Robust Gemini response parser with edge case handling.
+     * Handles missing nodes, null values, extra whitespace, and punctuation.
+     */
+    private boolean parseGeminiResponse(String responseBody) {
+        try {
+            JsonNode parsedRootNode = objectMapper.readTree(responseBody);
+
+            // Edge case 1: Missing candidates array
+            if (!parsedRootNode.has("candidates") || parsedRootNode.get("candidates").isEmpty()) {
+                System.err.println("[ScamShield Parser] No candidates in Gemini response");
+                return false;
+            }
+
+            JsonNode candidatesArray = parsedRootNode.get("candidates");
+
+            // Edge case 2: First candidate missing or null
+            if (candidatesArray.get(0) == null) {
+                System.err.println("[ScamShield Parser] First candidate is null");
+                return false;
+            }
+
+            JsonNode firstCandidate = candidatesArray.get(0);
+
+            // Edge case 3: Missing content field
+            if (!firstCandidate.has("content") || firstCandidate.get("content") == null) {
+                System.err.println("[ScamShield Parser] Content field missing");
+                return false;
+            }
+
+            JsonNode content = firstCandidate.get("content");
+
+            // Edge case 4: Missing parts array
+            if (!content.has("parts") || content.get("parts").isEmpty()) {
+                System.err.println("[ScamShield Parser] Parts array missing or empty");
+                return false;
+            }
+
+            JsonNode partsArray = content.get("parts");
+
+            // Edge case 5: First part missing or null
+            if (partsArray.get(0) == null) {
+                System.err.println("[ScamShield Parser] First part is null");
+                return false;
+            }
+
+            JsonNode firstPart = partsArray.get(0);
+
+            // Edge case 6: Missing text field
+            if (!firstPart.has("text") || firstPart.get("text").isNull()) {
+                System.err.println("[ScamShield Parser] Text field missing or null");
+                return false;
+            }
+
+            // Extract and normalize response text
+            String rawOutput = firstPart.get("text").asText()
+                .trim()
+                .toUpperCase(Locale.ROOT)
+                .replaceAll("[^A-Z]", ""); // Remove punctuation and whitespace
+
+            System.out.println("[ScamShield Engine] Gemini response (cleaned): " + rawOutput);
+
+            // Edge case 7: Unexpected response format
+            if (rawOutput.isEmpty()) {
+                System.err.println("[ScamShield Parser] Response text is empty after cleaning");
+                return false;
+            }
+
+            return "SCAM".equals(rawOutput);
+
+        } catch (Exception e) {
+            System.err.println("[ScamShield Parser] Error parsing Gemini response: " + e.getMessage());
+            return false;
+        }
     }
 
     public void connectToGemini() {
