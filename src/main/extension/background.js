@@ -11,7 +11,7 @@
 const MOCK_MODE = true; 
 
 // Upstream target route allocated for Person 1's Spring Boot REST framework configuration
-const LIVE_SCAMSHIELD_API_ROUTE = "http://localhost:8080/api/check-domain"; 
+const LIVE_SCAMSHIELD_API_ROUTE = "http://localhost:8080/api/v1/verify-link";
 
 chrome.runtime.onMessage.addListener((incomingMessage, sender, dispatchVerdictCallback) => {
     
@@ -23,17 +23,62 @@ chrome.runtime.onMessage.addListener((incomingMessage, sender, dispatchVerdictCa
         // ------------------------------------------------------------------
         if (MOCK_MODE) {
             console.log(`[ScamShield Sandbox Demo] Inspecting target: ${targetUrl}`);
-            
-            // Scenario 1: Simulate matching a fake bank portal (Triggers hard BLOCK)
-            if (targetUrl.contains("bimb") || targetUrl.contains("maybank") || targetUrl.contains("secure-login")) {
-                console.warn("[ScamShield Sandbox] Phishing indicators triggered! Issuing BLOCK action contract.");
-                dispatchVerdictCallback({ status: "BLOCK" });
-            } 
-            // Scenario 2: Simulate regular safe platforms (Triggers ALLOW path)
-            else {
-                dispatchVerdictCallback({ status: "ALLOW" });
-            }
+
+            const trustedDomains = [
+                "maybank2u.com.my", 
+                "maybank.com", 
+                "cimb.com.my", 
+                "hongleongbank.com.my", 
+                "pbebank.com", 
+                "rytbank.my", 
+                "bankislam.com.my", 
+                "publicbank.com.my", 
+                "bankislam.com.my"
+            ];
+
+            const isTrusted = trustedDomains.some(domain => targetUrl.contains(domain)
+            );
+
+            const suspiciousPatterns = [
+                "secure-login",
+                "verify-account",
+                "account-suspended",
+                "login-update",
+                "bank-verification",
+                "maybank-secure",
+                "cimb-secure",
+                "bankislam-secure",
+            ];
+
+            const isSuspicious = suspiciousPatterns.some(pattern => targetUrl.contains(pattern)
+            );
+
+           if (isTrusted) {
+            chrome.storage.local.set({
+                scamStatus: "ALLOW",
+                scamType: "Official trusted domain"
+            });
+
+            dispatchVerdictCallback({ status: "ALLOW" });
+
+        } else if (isSuspicious) {
+            chrome.storage.local.set({ 
+                scamStatus: "BLOCK", 
+                scamType: "Bank Impersonation Scam" 
+            });
+
+            dispatchVerdictCallback({ status: "BLOCK" });
+
+        } else {
+            chrome.storage.local.set({
+                scamStatus: "ALLOW", 
+                scamType: "None Detected" 
+            });
+
+            dispatchVerdictCallback({ status: "ALLOW" });
+        }
             return true;
+
         }
 
         // ------------------------------------------------------------------
