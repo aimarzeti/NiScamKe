@@ -23,17 +23,55 @@ chrome.runtime.onMessage.addListener((incomingMessage, sender, dispatchVerdictCa
         // ------------------------------------------------------------------
         if (MOCK_MODE) {
             console.log(`[ScamShield Sandbox Demo] Inspecting target: ${targetUrl}`);
-            
-            // Scenario 1: Simulate matching a fake bank portal (Triggers hard BLOCK)
-            if (targetUrl.contains("bimb") || targetUrl.contains("maybank") || targetUrl.contains("secure-login")) {
-                console.warn("[ScamShield Sandbox] Phishing indicators triggered! Issuing BLOCK action contract.");
+
+            const trustedDomains = [
+                "maybank2u.com.my", 
+                "maybank.com", 
+                "cimb.com.my", 
+                "hongleongbank.com.my", 
+                "pbebank.com", 
+                "rytbank.my", 
+                "bankislam.com.my", 
+                "publicbank.com.my", 
+                "bankislam.com.my"
+            ];
+
+            const isTrusted = trustedDomains.some(domain => targetUrl.contains(domain)
+            );
+
+            const suspiciousPatterns = [
+                "secure-login",
+                "verify-account",
+                "account-suspended",
+                "login-update",
+                "bank-verification",
+                "maybank-secure",
+                "cimb-secure",
+                "bankislam-secure",
+            ];
+
+            const isSuspicious = suspiciousPatterns.some(pattern => targetUrl.contains(pattern)
+            );
+
+            if (isTrusted && isSuspicious) {
+                chrome.storage.local.set({ 
+                    scamStatus: "BLOCK", 
+                    scamType: "Bank Impersonation Scam" 
+                });
+
                 dispatchVerdictCallback({ status: "BLOCK" });
-            } 
-            // Scenario 2: Simulate regular safe platforms (Triggers ALLOW path)
-            else {
+
+            } else {
+                chrome.storage.local.set({
+                    scamStatus: "ALLOW", 
+                    scamType: "None Detected" 
+                });
+
                 dispatchVerdictCallback({ status: "ALLOW" });
             }
+
             return true;
+
         }
 
         // ------------------------------------------------------------------
