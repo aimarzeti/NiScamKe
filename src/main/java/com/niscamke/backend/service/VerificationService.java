@@ -4,6 +4,7 @@ import java.net.URI;
 import java.time.LocalDateTime;
 import java.util.Locale;
 
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import com.niscamke.backend.controller.LinkVerificationController.VerificationRequest;
@@ -20,7 +21,8 @@ public class VerificationService {
     private final ScamRegistryRepository scamRegistryRepository;
     private final GeminiIntegrationService geminiIntegrationService;
 
-    public VerificationResponse checkLink(VerificationRequest request) {
+    @Cacheable(value = "domainVerifications", key = "#request.currentUrl")
+public VerificationResponse checkLink(VerificationRequest request) {
         String domain = extractDomainName(request.getCurrentUrl());
         if (domain.isBlank()) {
             return new VerificationResponse("ALLOW", "Unable to verify malformed URL");
