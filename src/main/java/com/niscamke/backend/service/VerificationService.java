@@ -4,7 +4,6 @@ import java.net.URI;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
 import java.util.Optional;
 
 import org.springframework.cache.annotation.Cacheable;
@@ -72,7 +71,7 @@ public VerificationResponse checkLink(VerificationRequest request) {
         String normalizedUrl = request.getUrl() == null ? "" : request.getUrl().trim();
         String domain = extractDomainName(normalizedUrl);
         if (domain.isBlank()) {
-            DecisionLog invalid = Objects.requireNonNull(decisionLogRepository.save(DecisionLog.builder()
+            DecisionLog invalid = DecisionLog.builder()
                     .url(normalizedUrl.isBlank() ? "unknown" : normalizedUrl)
                     .domainName("unknown")
                     .decision("WARN")
@@ -80,7 +79,8 @@ public VerificationResponse checkLink(VerificationRequest request) {
                     .confidence(0.4)
                     .reason("Malformed URL. Unable to verify safely.")
                     .evidenceSources("INPUT_VALIDATION")
-                    .build()));
+                    .build();
+            decisionLogRepository.save(invalid);
             return mapLogToScanResponse(invalid, "WARN", List.of("Malformed URL. Unable to verify safely."), 300);
         }
 
@@ -106,7 +106,7 @@ public VerificationResponse checkLink(VerificationRequest request) {
                 : "No significant phishing indicators detected.";
 
         String evidenceSources = knownScam ? "COMMUNITY_DB,RULE_ENGINE" : aiScam ? "AI_MODEL,RULE_ENGINE" : "RULE_ENGINE";
-        DecisionLog decisionLog = Objects.requireNonNull(decisionLogRepository.save(DecisionLog.builder()
+        DecisionLog decisionLog = DecisionLog.builder()
                 .url(normalizedUrl)
                 .domainName(domain)
                 .decision(decision)
@@ -114,7 +114,8 @@ public VerificationResponse checkLink(VerificationRequest request) {
                 .confidence(confidence)
                 .reason(reason)
                 .evidenceSources(evidenceSources)
-                .build()));
+                .build();
+        decisionLogRepository.save(decisionLog);
 
         if ("BLOCK".equals(decision) && !knownScam) {
             saveToRegistry(domain);
@@ -133,16 +134,17 @@ public VerificationResponse checkLink(VerificationRequest request) {
             return "Invalid URL. Unable to submit false-positive report.";
         }
 
-        Objects.requireNonNull(falsePositiveReportRepository.save(FalsePositiveReport.builder()
+        FalsePositiveReport report = FalsePositiveReport.builder()
                 .url(url)
                 .domainName(domain)
                 .decisionId(decisionId)
                 .reporterEmail(reporterEmail)
                 .reason(reason == null || reason.isBlank() ? "User reported false positive." : reason)
                 .status("PENDING_REVIEW")
-                .build()));
+                .build();
+        falsePositiveReportRepository.save(report);
 
-        Objects.requireNonNull(decisionLogRepository.save(DecisionLog.builder()
+        DecisionLog reportLog = DecisionLog.builder()
                 .url(url)
                 .domainName(domain)
                 .decision("WARN")
@@ -150,7 +152,8 @@ public VerificationResponse checkLink(VerificationRequest request) {
                 .confidence(0.6)
                 .reason("False-positive report submitted by community and queued for review.")
                 .evidenceSources("FALSE_POSITIVE_REPORT")
-                .build()));
+                .build();
+        decisionLogRepository.save(reportLog);
         return "False-positive report received and queued for review.";
     }
 
@@ -161,7 +164,7 @@ public VerificationResponse checkLink(VerificationRequest request) {
         return falsePositiveReportRepository.findByStatus(status);
     }
 
-    public Optional<FalsePositiveReport> reviewFalsePositiveReport(Long reportId, String newStatus, String reviewNote) {
+    public Optional<FalsePositiveReport> reviewFalsePositiveReport(long reportId, String newStatus, String reviewNote) {
         return falsePositiveReportRepository.findById(reportId).map(report -> {
             String status = (newStatus == null ? "" : newStatus.trim().toUpperCase(Locale.ROOT));
             if (!"APPROVED".equals(status) && !"REJECTED".equals(status)) {
@@ -177,7 +180,7 @@ public VerificationResponse checkLink(VerificationRequest request) {
                         .ifPresent(scamRegistryRepository::delete);
             }
 
-            Objects.requireNonNull(decisionLogRepository.save(DecisionLog.builder()
+            DecisionLog reviewLog = DecisionLog.builder()
                     .url(report.getUrl())
                     .domainName(report.getDomainName())
                     .decision("APPROVED".equals(status) ? "ALLOW" : "BLOCK")
@@ -185,9 +188,11 @@ public VerificationResponse checkLink(VerificationRequest request) {
                     .confidence(0.85)
                     .reason("False-positive report " + status.toLowerCase(Locale.ROOT) + " by reviewer.")
                     .evidenceSources("MODERATOR_REVIEW")
-                    .build()));
+                    .build();
+            decisionLogRepository.save(reviewLog);
 
-            return Objects.requireNonNull(falsePositiveReportRepository.save(report));
+            falsePositiveReportRepository.save(report);
+            return report;
         });
     }
 
@@ -228,7 +233,7 @@ public VerificationResponse checkLink(VerificationRequest request) {
                 .reportedAt(now)
                 .build();
 
-        Objects.requireNonNull(scamRegistryRepository.save(scamRegistry));
+        scamRegistryRepository.save(scamRegistry);
     }
 
     public void submitCommunityReport(ReportRequest request) {
@@ -238,36 +243,27 @@ public VerificationResponse checkLink(VerificationRequest request) {
         }
 
         LocalDateTime now = LocalDateTime.now();
-        Objects.requireNonNull(userReportRepository.save(UserReport.builder()
+        UserReport userReport = UserReport.builder()
                 .url(request.getUrl())
                 .domainName(domain)
                 .reporterEmail(request.getReporterEmail())
                 .scamType(request.getScamType() != null ? request.getScamType() : "COMMUNITY_REPORTED")
                 .description(request.getDescription())
                 .status("PENDING_REVIEW")
-                .build()));
+                .build();
+        userReportRepository.save(userReport);
 
-        scamRegistryRepository.findByDomainName(domain)
-                .map(existing -> {
-                    existing.setScamType(request.getScamType() != null ? request.getScamType() : "COMMUNITY_REPORTED");
-                    existing.setThreatLevel("HIGH");
-                    existing.setDescription(request.getDescription() != null ? request.getDescription() : "Community report submitted");
-                    existing.setFlaggedAt(now);
-                    existing.setReportedBy(request.getReporterEmail() != null ? request.getReporterEmail() : "COMMUNITY");
-                    existing.setReportedAt(now);
-                    return Objects.requireNonNull(scamRegistryRepository.save(existing));
-                })
-                .orElseGet(() -> Objects.requireNonNull(scamRegistryRepository.save(ScamRegistry.builder()
-                        .domainName(domain)
-                        .scamType(request.getScamType() != null ? request.getScamType() : "COMMUNITY_REPORTED")
-                        .threatLevel("HIGH")
-                        .description(request.getDescription() != null ? request.getDescription() : "Community report submitted")
-                        .flaggedAt(now)
-                        .reportedBy(request.getReporterEmail() != null ? request.getReporterEmail() : "COMMUNITY")
-                        .reportedAt(now)
-                        .build())));
+        ScamRegistry registryEntry = scamRegistryRepository.findByDomainName(domain)
+                .orElseGet(() -> ScamRegistry.builder().domainName(domain).build());
+        registryEntry.setScamType(request.getScamType() != null ? request.getScamType() : "COMMUNITY_REPORTED");
+        registryEntry.setThreatLevel("HIGH");
+        registryEntry.setDescription(request.getDescription() != null ? request.getDescription() : "Community report submitted");
+        registryEntry.setFlaggedAt(now);
+        registryEntry.setReportedBy(request.getReporterEmail() != null ? request.getReporterEmail() : "COMMUNITY");
+        registryEntry.setReportedAt(now);
+        scamRegistryRepository.save(registryEntry);
 
-        Objects.requireNonNull(decisionLogRepository.save(DecisionLog.builder()
+        DecisionLog reportLog = DecisionLog.builder()
                 .url(request.getUrl())
                 .domainName(domain)
                 .decision("WARN")
@@ -275,7 +271,8 @@ public VerificationResponse checkLink(VerificationRequest request) {
                 .confidence(0.7)
                 .reason("Community report submitted and queued for trust review.")
                 .evidenceSources("COMMUNITY_REPORT")
-                .build()));
+                .build();
+        decisionLogRepository.save(reportLog);
     }
 
     private ScanResponse mapLogToScanResponse(DecisionLog log, String decision, List<String> reasons, int ttlSeconds) {
