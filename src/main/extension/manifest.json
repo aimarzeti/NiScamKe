@@ -3,27 +3,39 @@
   "name": "Ni Scam Ke?",
   "short_name": "Ni Scam Ke?",
   "version": "1.0.0",
-  "description": "Real-time client-side Layer 1 domain scouter integrated with the ScamShield AI Render backend engine.",
+  "description": "Real-time phishing and scam link detection with explainable risk alerts.",
   "permissions": [
     "activeTab",
     "tabs",
     "storage",
     "notifications"
   ],
+  "host_permissions": [
+    "http://localhost:8080/*"
+  ],
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_start"
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["blocked.html", "blocked.css"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "blocked.html",
+        "blocked.css"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ],
   "action": {

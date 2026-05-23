@@ -1,40 +1,31 @@
 <!DOCTYPE html>
-<html lang="ms">
-    <head>
-        <meta charset="UTF-8" />
-        <title> Ni Scam Ke? </title>
-        <link rel="stylesheet" href="popup.css"/>
-    </head>
-    <body>
-        <div id="safe-popup" class="popup safe">
-            <div class="shield"> 🛡️ </div>
-            <h1> Ni Scam Ke? </h1>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ni Scam Ke?</title>
+    <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+    <main class="popup" id="popupRoot">
+        <p class="tag" id="riskTag">Ready to scan</p>
+        <h1>Ni Scam Ke?</h1>
+        <p class="status" id="statusLine">No scan result yet.</p>
 
-            <p class="status"> This site is not a scam!</p>
+        <section class="info-box">
+            <p><strong>URL:</strong> <span id="urlLine">-</span></p>
+            <p><strong>Reason:</strong> <span id="reasonLine">-</span></p>
+            <p><strong>Risk:</strong> <span id="riskLine">-</span></p>
+            <p><strong>Confidence:</strong> <span id="confidenceLine">-</span></p>
+            <p><strong>Scanned At:</strong> <span id="timeLine">-</span></p>
+        </section>
 
-            <div class="info-box">
-                <p><strong>Status:</strong> Safe page </p>
-                <p><strong>Overall Risk Level:</strong> Low</p>
-            </div>
-
-            <button id="scan-btn"> Scan Again </button>
+        <div class="actions">
+            <button id="scanBtn" class="primary">Scan Current Tab</button>
+            <button id="demoBlockBtn" class="danger">Demo Scam Alert</button>
+            <button id="demoSafeBtn" class="neutral">Demo Safe Scan</button>
         </div>
-
-        <div id="danger-popup" class="popup danger">
-            <div class="shield"> ⚠️ </div>
-
-            <h1> Ni Scam Ke? </h1>
-
-            <p class="status"> This site is suspicious!</p>
-
-            <div class="info-box">
-                <p><strong>Status:</strong> Dangerous page! </p>
-                <p><strong>Overall Risk Level:</strong> High</p>
-            </div>
-
-            <button> Scan Again </button>
-
-            <script src="popup.js"></script>
-        </div>
-    </body>
+    </main>
+    <script src="popup.js"></script>
+</body>
 </html>
