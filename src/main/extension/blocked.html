@@ -9,46 +9,38 @@
 <body>
     <main class="container">
         <section class="warning-card">
-            <div class="language-row">
-                <label for="languageSelect" id="languageLabel">Bahasa</label>
-                <select id="languageSelect">
-                    <option value="ms">Bahasa Melayu</option>
-                    <option value="en">English</option>
-                </select>
-            </div>
-
-            <p class="risk-pill" id="riskPill">High Risk</p>
-            <h1 id="pageTitle">Laman web ini mempunyai unsur scam!</h1>
+            <p class="risk-pill" id="riskPill">This is a scam!</p>
+            <h1 id="pageTitle">This website has scam elements!</h1>
             <p class="subtitle" id="summaryLine">
-                Laman ini kelihatan mencurigakan. We paused it before you entered passwords, OTPs, or banking details.
+                We blocked this page before you entered personal information, OTPs, passwords, or payment details.
             </p>
 
             <section class="meta-grid">
                 <div class="meta-item">
-                    <p class="meta-label" id="blockedUrlLabel">URL disekat</p>
+                    <p class="meta-label">Blocked URL</p>
                     <p class="meta-value" id="blockedUrl">-</p>
                 </div>
                 <div class="meta-item">
-                    <p class="meta-label" id="decisionIdLabel">ID keputusan</p>
+                    <p class="meta-label">Decision ID</p>
                     <p class="meta-value" id="decisionId">-</p>
                 </div>
                 <div class="meta-item">
-                    <p class="meta-label" id="riskScoreLabel">Skor risiko</p>
+                    <p class="meta-label">Risk score</p>
                     <div class="risk-meter">
                         <span id="riskFill"></span>
                     </div>
                     <p class="meta-value" id="riskScore">-</p>
                 </div>
                 <div class="meta-item">
-                    <p class="meta-label" id="confidenceLabel">Keyakinan</p>
+                    <p class="meta-label">Confidence</p>
                     <p class="meta-value" id="confidence">-</p>
                 </div>
             </section>
 
             <section class="risk-box">
-                <h2 id="whyTitle">Sebab disekat</h2>
+                <h2 id="reasonsTitle">Why blocked</h2>
                 <ul id="reasonsList">
-                    <li>Suspicious link structure detected.</li>
+                    <li>Gemini AI flagged suspicious scam signals.</li>
                 </ul>
                 <p class="evidence" id="sourceLine"></p>
             </section>
@@ -58,20 +50,20 @@
             </p>
 
             <div class="actions">
-                <button class="primary-btn" id="goBackButton">Kembali selamat</button>
-                <button class="secondary-btn" id="continueButton">Teruskan juga</button>
+                <button class="primary-btn" id="goBackButton">Go to safety</button>
+                <button class="secondary-btn" id="continueButton">Continue anyway</button>
             </div>
 
             <details class="false-positive">
-                <summary id="falsePositiveSummary">Keputusan ini salah? Laporkan false positive</summary>
+                <summary id="falsePositiveSummary">This looks wrong? Report false positive</summary>
                 <form id="falsePositiveForm">
-                    <label for="reporterEmail" id="emailLabel">E-mel (pilihan)</label>
+                    <label for="reporterEmail" id="emailLabel">Email (optional)</label>
                     <input type="email" id="reporterEmail" placeholder="you@example.com" />
 
-                    <label for="reportReason" id="reportReasonLabel">Mengapa laman ini mungkin selamat</label>
-                    <textarea id="reportReason" rows="3" placeholder="Contoh: Ini domain rasmi organisasi saya."></textarea>
+                    <label for="reportReason" id="reportReasonLabel">Why this is likely safe</label>
+                    <textarea id="reportReason" rows="3" placeholder="For example: This is my official company login domain."></textarea>
 
-                    <button type="submit" class="report-btn" id="reportButton">Hantar semakan</button>
+                    <button type="submit" class="report-btn" id="reportButton">Submit review request</button>
                     <p class="report-status" id="reportStatus"></p>
                 </form>
             </details>

@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -31,6 +32,20 @@ import lombok.RequiredArgsConstructor;
 @SuppressWarnings("null")
 public class VerificationService {
 
+    private static final Set<String> TRUSTED_DOMAINS = Set.of(
+            "maybank2u.com.my",
+            "maybank.com",
+            "cimbclicks.com.my",
+            "cimb.com.my",
+            "bankislam.com.my",
+            "beubankislam.com.my",
+            "rhbbank.com.my",
+            "pbebank.com",
+            "publicbank.com.my",
+            "hongleongbank.com.my",
+            "mybsn.com.my"
+    );
+
     private final ScamRegistryRepository scamRegistryRepository;
     private final DecisionLogRepository decisionLogRepository;
     private final UserReportRepository userReportRepository;
@@ -44,6 +59,10 @@ public class VerificationService {
             return new VerificationResponse("ALLOW", "Unable to verify malformed URL");
         }
 
+        if (isTrustedDomain(domain)) {
+            return new VerificationResponse("ALLOW", "Trusted official domain. Stay alert before entering sensitive details.");
+        }
+
         return scamRegistryRepository.findByDomainName(domain)
                 .map(entry -> new VerificationResponse(
                         "BLOCK",
@@ -52,6 +71,10 @@ public class VerificationService {
     }
 
     private VerificationResponse analyzeUnknownDomain(String domain, String pageText) {
+        if (isTrustedDomain(domain)) {
+            return new VerificationResponse("ALLOW", "Trusted official domain. Stay alert before entering sensitive details.");
+        }
+
         int structuralRisk = geminiIntegrationService.assessStructuralRisk(domain, pageText);
         boolean isScam = geminiIntegrationService.analyzeWithGemini(domain, pageText);
 
@@ -70,6 +93,21 @@ public class VerificationService {
     }
 
     public ScanResponse scanUrl(ScanRequest request) {
+        try {
+            return scanUrlInternal(request);
+        } catch (RuntimeException ex) {
+            return new ScanResponse(
+                    "failsafe-" + System.currentTimeMillis(),
+                    "WARN",
+                    50,
+                    0.55,
+                    List.of("Live backend stayed available, but the scan hit an internal error. Avoid entering passwords or OTPs until you rescan."),
+                    "BACKEND_FAILSAFE",
+                    60);
+        }
+    }
+
+    private ScanResponse scanUrlInternal(ScanRequest request) {
         String normalizedUrl = request.getUrl() == null ? "" : request.getUrl().trim();
         String domain = extractDomainName(normalizedUrl);
         if (domain.isBlank()) {
@@ -86,42 +124,47 @@ public class VerificationService {
             return mapLogToScanResponse(invalid, "WARN", List.of("Malformed URL. Unable to verify safely."), 300);
         }
 
-        int structuralRisk = geminiIntegrationService.assessStructuralRisk(domain, request.getPageText());
-        boolean knownScam = scamRegistryRepository.findByDomainName(domain).isPresent();
-        GeminiAnalysis geminiAnalysis = knownScam
-                ? new GeminiAnalysis(true, List.of(
-                        "Why flagged: This domain is already listed in the community scam registry.",
-                        "Modus operandi: Previously reported scam domains are commonly reused to collect credentials, OTPs, payments, or personal contact details."))
-                : geminiIntegrationService.analyzeWithGeminiDetails(domain, request.getPageText(), request.getTargetLanguage());
-        boolean aiScam = knownScam || geminiAnalysis.scam();
+        String pageText = request.getPageText() == null ? "" : request.getPageText();
+        int structuralRisk = geminiIntegrationService.assessStructuralRisk(domain, pageText);
+        boolean trustedDomain = isTrustedDomain(domain);
+        boolean knownScam = !trustedDomain && scamRegistryRepository.findByDomainName(domain).isPresent();
+        String geminiContext = trustedDomain
+                ? "Trusted official domain status: this domain is in the trusted allowlist. Use Gemini to identify what website it is and explain any residual user caution, but do not treat this trusted domain as a scam. Page text: " + pageText
+                : knownScam
+                ? "Community registry status: this domain is already listed as a scam. Explain why it is blocked and what the scam is trying to do. Page text: " + pageText
+                : pageText;
+        GeminiAnalysis geminiAnalysis = geminiIntegrationService.analyzeWithGeminiDetails(domain, geminiContext, "en");
+        boolean aiScam = !trustedDomain && (knownScam || geminiAnalysis.scam());
 
-        int riskScore = knownScam ? 95 : structuralRisk;
-        if (!knownScam && aiScam) {
+        int riskScore = trustedDomain ? 8 : knownScam ? 95 : structuralRisk;
+        if (!trustedDomain && !knownScam && aiScam) {
             riskScore = Math.max(70, structuralRisk);
         }
         if (!aiScam && structuralRisk == 0) {
             riskScore = 10;
         }
 
-        String decision = riskScore >= 80 ? "BLOCK" : (riskScore >= 50 ? "WARN" : "ALLOW");
-        double confidence = riskScore >= 80 ? 0.95 : (riskScore >= 50 ? 0.75 : 0.92);
+        String decision = trustedDomain ? "ALLOW" : riskScore >= 80 ? "BLOCK" : (riskScore >= 50 ? "WARN" : "ALLOW");
+        double confidence = trustedDomain ? 0.97 : riskScore >= 80 ? 0.95 : (riskScore >= 50 ? 0.75 : 0.92);
 
-        List<String> reasons = geminiAnalysis.reasons().isEmpty()
+        List<String> reasons = trustedDomain
+                ? List.of("Trusted official domain. Stay alert and verify the URL before entering sensitive details.")
+                : geminiAnalysis.reasons().isEmpty()
                 ? List.of(knownScam
                         ? "Known scam domain from community intelligence."
                         : aiScam
                         ? "AI phishing analysis flagged suspicious signals."
                         : "No significant phishing indicators detected.")
                 : geminiAnalysis.reasons();
-        reasons = localizeReasons(reasons, request.getTargetLanguage());
-
-        String reason = knownScam
-                ? "Known scam domain from community intelligence."
+        String reason = trustedDomain
+                ? reasons.get(0)
+                : knownScam
+                ? reasons.get(0)
                 : aiScam
                 ? reasons.get(0)
                 : "No significant phishing indicators detected.";
 
-        String evidenceSources = knownScam ? "COMMUNITY_DB,RULE_ENGINE" : aiScam ? "AI_MODEL,RULE_ENGINE" : "RULE_ENGINE";
+        String evidenceSources = trustedDomain ? "AI_MODEL,TRUSTED_ALLOWLIST" : knownScam ? "AI_MODEL,COMMUNITY_DB,RULE_ENGINE" : "AI_MODEL,RULE_ENGINE";
         DecisionLog decisionLog = DecisionLog.builder()
                 .url(normalizedUrl)
                 .domainName(domain)
@@ -133,7 +176,7 @@ public class VerificationService {
                 .build();
         decisionLogRepository.save(decisionLog);
 
-        if ("BLOCK".equals(decision) && !knownScam) {
+        if ("BLOCK".equals(decision) && !knownScam && !trustedDomain) {
             saveToRegistry(domain);
         }
 
@@ -309,55 +352,6 @@ public class VerificationService {
                 ttlSeconds);
     }
 
-    private List<String> localizeReasons(List<String> reasons, String targetLanguage) {
-        if (targetLanguage == null || !targetLanguage.toLowerCase(Locale.ROOT).startsWith("ms")) {
-            return reasons;
-        }
-
-        return reasons.stream()
-                .map(this::localizeReasonToMalay)
-                .toList();
-    }
-
-    private String localizeReasonToMalay(String reason) {
-        return switch (reason) {
-            case "Why flagged: The site combines high-risk scam signals such as suspicious domain wording, free-aid or device bait, typo-heavy text, or personal-contact collection." ->
-                    "Sebab disekat: Laman ini menggabungkan tanda scam berisiko tinggi seperti perkataan domain yang mencurigakan, umpan bantuan atau peranti percuma, teks yang banyak kesilapan, atau kutipan maklumat peribadi.";
-            case "Why blocked: The site combines high-risk scam signals such as suspicious domain wording, free-aid or device bait, typo-heavy text, or personal-contact collection." ->
-                    "Sebab disekat: Laman ini menggabungkan tanda scam berisiko tinggi seperti perkataan domain yang mencurigakan, umpan bantuan atau peranti percuma, teks yang banyak kesilapan, atau kutipan maklumat peribadi.";
-            case "Sebab disekat: Laman ini menggabungkan tanda scam berisiko tinggi seperti perkataan domain yang mencurigakan, umpan bantuan atau peranti percuma, teks yang banyak kesilapan, atau kutipan maklumat peribadi." ->
-                    reason;
-            case "Modus operandi: The page appears designed to lure users into submitting personal details or messaging an operator before the scammer requests more sensitive information." ->
-                    "Modus operandi: Laman ini kelihatan direka untuk memancing pengguna menyerahkan maklumat peribadi atau menghubungi operator sebelum scammer meminta maklumat yang lebih sensitif.";
-            case "Known scam domain from community intelligence." ->
-                    "Sebab disekat: Domain ini sudah tersenarai dalam pangkalan data komuniti sebagai scam.";
-            case "Why flagged: This domain is already listed in the community scam registry." ->
-                    "Sebab disekat: Domain ini sudah tersenarai dalam pendaftaran scam komuniti.";
-            case "Modus operandi: Previously reported scam domains are commonly reused to collect credentials, OTPs, payments, or personal contact details." ->
-                    "Modus operandi: Domain scam yang pernah dilaporkan sering digunakan semula untuk mengutip kelayakan log masuk, OTP, bayaran, atau maklumat perhubungan peribadi.";
-            case "AI phishing analysis flagged suspicious signals." ->
-                    "Sebab disekat: Analisis AI phishing mengesan isyarat mencurigakan.";
-            case "No significant phishing indicators detected." ->
-                    "Tiada petunjuk phishing yang ketara dikesan.";
-            case "Why flagged: No major scam indicators were detected in the available URL and page text." ->
-                    "Sebab disekat: Tiada petunjuk scam utama dikesan dalam URL dan teks laman yang tersedia.";
-            case "Why blocked: No major scam indicators were detected in the available URL and page text." ->
-                    "Sebab disekat: Tiada petunjuk scam utama dikesan dalam URL dan teks laman yang tersedia.";
-            case "Modus operandi: No clear scam workflow was identified from the scanned content." ->
-                    "Modus operandi: Tiada aliran scam yang jelas dikenal pasti daripada kandungan yang diimbas.";
-            case "Why flagged: Some suspicious signals were detected, but the evidence is not strong enough for a full block." ->
-                    "Sebab disekat: Beberapa isyarat mencurigakan dikesan, tetapi buktinya belum cukup kuat untuk sekatan penuh.";
-            case "Why blocked: Some suspicious signals were detected, but the evidence is not strong enough for a full block." ->
-                    "Sebab disekat: Beberapa isyarat mencurigakan dikesan, tetapi buktinya belum cukup kuat untuk sekatan penuh.";
-            case "Modus operandi: Scammers often use this pattern to build trust before asking for credentials, OTPs, or contact details." ->
-                    "Modus operandi: Scammer sering menggunakan corak ini untuk membina kepercayaan sebelum meminta kelayakan log masuk, OTP, atau maklumat perhubungan.";
-            default -> reason
-                    .replaceFirst("^Why flagged:", "Sebab disekat:")
-                    .replaceFirst("^Why blocked:", "Sebab disekat:")
-                    .replaceFirst("^Modus operandi:", "Modus operandi:");
-        };
-    }
-
     private String extractDomainName(String urlString) {
         if (urlString == null || urlString.isBlank()) {
             return "";
@@ -390,6 +384,19 @@ public class VerificationService {
         }
 
         return domain;
+    }
+
+    private boolean isTrustedDomain(String domain) {
+        if (domain == null || domain.isBlank()) {
+            return false;
+        }
+
+        String normalizedDomain = domain.toLowerCase(Locale.ROOT);
+        return TRUSTED_DOMAINS.stream()
+                .anyMatch(trustedDomain -> normalizedDomain.equals(trustedDomain)
+                        || normalizedDomain.endsWith("." + trustedDomain))
+                || normalizedDomain.endsWith(".gov.my")
+                || normalizedDomain.endsWith(".edu.my");
     }
 }
 

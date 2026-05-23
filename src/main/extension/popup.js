@@ -1,119 +1,50 @@
-const API_BASE_URL = "http://localhost:8080";
-const DEFAULT_LANGUAGE = "ms";
-
 const UI_COPY = {
-    ms: {
-        languageLabel: "Bahasa",
-        riskScoreLabel: "Skor risiko",
-        statusLabel: "Status",
-        confidenceTitle: "Keyakinan",
-        modeTitle: "Mod",
-        domainTitle: "Domain",
-        whyLabel: "Sebab disekat",
-        privacyNote: "Nota privasi: Ni Scam Ke? tidak akan meminta kata laluan, OTP, atau maklumat perbankan.",
-        scanButton: "Imbas Laman Ini",
-        scanButtonLoading: "Sedang mengimbas laman...",
-        waitingDecision: "Menunggu",
-        currentTab: "Tab semasa",
-        notScanned: "Belum diimbas",
-        liveBackend: "Pelayan langsung",
-        localFallback: "Semakan tempatan",
-        reasonFallback: "Belum ada keputusan imbasan. Klik imbas untuk menyemak semula laman ini.",
-        refreshingReason: "Memuat semula tab supaya pengimbas kandungan dapat menilai laman terkini.",
-        states: {
-            ALLOW: {
-                title: "Bukan Scam!",
-                subtitle: "Laman ini nampak selamat. Tetap berhati-hati sebelum memasukkan maklumat sensitif."
-            },
-            WARN: {
-                title: "Berhati-hati",
-                subtitle: "Ada tanda mencurigakan. Elakkan memasukkan kata laluan, OTP, atau butiran bayaran."
-            },
-            USER_BYPASS: {
-                title: "Amaran dipintas",
-                subtitle: "Anda memilih untuk teruskan atas risiko sendiri. Laman ini masih dianggap mencurigakan."
-            },
-            BLOCK: {
-                title: "Ini Adalah Scam!",
-                subtitle: "Kami menghentikan laman ini kerana ia menyerupai cubaan scam atau phishing."
-            },
-            WAITING: {
-                title: "Sedia untuk imbas",
-                subtitle: "Buka laman atau imbas tab semasa untuk melihat isyarat perlindungan terkini."
-            },
-            SCANNING: {
-                title: "Sedang mengimbas",
-                subtitle: "Ni Scam Ke? sedang menyemak laman semasa."
-            }
-        }
-    },
-    en: {
-        languageLabel: "Language",
-        riskScoreLabel: "Risk score",
-        statusLabel: "Status",
-        confidenceTitle: "Confidence",
-        modeTitle: "Mode",
-        domainTitle: "Domain",
-        whyLabel: "Why blocked",
-        privacyNote: "Privacy note: Ni Scam Ke? never asks for passwords, OTPs, or banking credentials.",
-        scanButton: "Scan Current Page",
-        scanButtonLoading: "Scanning current tab...",
-        waitingDecision: "Waiting",
-        currentTab: "Current tab",
-        notScanned: "Not scanned",
-        liveBackend: "Live backend",
-        localFallback: "Local fallback",
-        reasonFallback: "No scan result yet. Click scan to refresh the current page.",
-        refreshingReason: "Refreshing the tab so the content scanner can evaluate the latest page.",
-        states: {
-            ALLOW: {
-                title: "Looks safe",
-                subtitle: "This page looks safe. Keep an eye out before entering sensitive details."
-            },
-            WARN: {
-                title: "Use caution",
-                subtitle: "Suspicious signs were found. Avoid entering passwords, OTPs, or payment details."
-            },
-            USER_BYPASS: {
-                title: "Bypassed warning",
-                subtitle: "You continued at your own risk. This page is still considered suspicious."
-            },
-            BLOCK: {
-                title: "This is a scam!",
-                subtitle: "We stopped this page because it looks like a scam or phishing attempt."
-            },
-            WAITING: {
-                title: "Ready to scan",
-                subtitle: "Open a page or scan the current tab to see the latest protection signal."
-            },
-            SCANNING: {
-                title: "Scanning now",
-                subtitle: "Checking the current page with Ni Scam Ke? protection."
-            }
+    riskScoreLabel: "Risk score",
+    statusLabel: "Status",
+    confidenceTitle: "Confidence",
+    modeTitle: "Mode",
+    domainTitle: "Domain",
+    whyLabel: "Why blocked",
+    safeReminderLabel: "Stay alert",
+    safeReminder: "This page looks safe, but always check the URL and avoid entering sensitive details unless you fully trust the site.",
+    privacyNote: "Privacy note: Ni Scam Ke? never asks for passwords, OTPs, or banking credentials.",
+    scanButton: "Scan Current Page",
+    scanButtonLoading: "Scanning current tab...",
+    waitingDecision: "Waiting",
+    currentTab: "Current tab",
+    notScanned: "Not scanned",
+    liveBackend: "Live backend + Gemini AI",
+    localFallback: "Backend unavailable",
+    reasonFallback: "No scan result yet. Click scan to refresh the current page.",
+    refreshingReason: "Refreshing the tab so the live backend and Gemini AI can evaluate the latest page.",
+    states: {
+        ALLOW: {
+            title: "Looks safe",
+            subtitle: "This page looks safe. Stay alert before entering sensitive details."
+        },
+        WARN: {
+            title: "Use caution",
+            subtitle: "Suspicious signs were found. Avoid entering passwords, OTPs, or payment details."
+        },
+        USER_BYPASS: {
+            title: "This website might be a scam!",
+            subtitle: "You chose to continue anyway. Be careful and do not enter passwords, OTPs, payment details, or personal information unless you fully trust this site."
+        },
+        BLOCK: {
+            title: "This is a scam!",
+            subtitle: "We stopped this page because Gemini AI and the live backend found scam or phishing signals."
+        },
+        WAITING: {
+            title: "Ready to scan",
+            subtitle: "Open a page or scan the current tab to see the latest protection signal."
+        },
+        SCANNING: {
+            title: "Scanning now",
+            subtitle: "Checking the current page with the live backend and Gemini AI."
         }
     }
 };
 
-const LOCAL_REASON_TRANSLATIONS = {
-    ms: {
-        "You chose to continue anyway. This page is still considered risky.": "Anda memilih untuk teruskan. Laman ini masih dianggap berisiko.",
-        "Temporary user bypass is active for this page.": "Pintasan sementara pengguna sedang aktif untuk laman ini.",
-        "No significant phishing indicators detected.": "Tiada petunjuk phishing yang ketara dikesan.",
-        "Some scam-like signals were found, but not enough to hard-block.": "Beberapa tanda seperti scam ditemui, tetapi belum cukup untuk sekatan penuh.",
-        "This looks like a free-aid or free-device application scam.": "Ini kelihatan seperti scam permohonan bantuan atau peranti percuma.",
-        "The page combines typo-filled application text with Telegram or personal-detail collection.": "Laman ini menggabungkan teks permohonan yang banyak kesilapan dengan kutipan Telegram atau maklumat peribadi.",
-        "Protection status is uncertain. Avoid entering passwords or OTPs here.": "Status perlindungan tidak pasti. Elakkan memasukkan kata laluan atau OTP di sini.",
-        "Why flagged: The site combines high-risk scam signals such as suspicious domain wording, free-aid or device bait, typo-heavy text, or personal-contact collection.": "Sebab disekat: Laman ini menggabungkan tanda scam berisiko tinggi seperti perkataan domain yang mencurigakan, umpan bantuan atau peranti percuma, teks yang banyak kesilapan, atau kutipan maklumat peribadi.",
-        "Why blocked: The site combines high-risk scam signals such as suspicious domain wording, free-aid or device bait, typo-heavy text, or personal-contact collection.": "Sebab disekat: Laman ini menggabungkan tanda scam berisiko tinggi seperti perkataan domain yang mencurigakan, umpan bantuan atau peranti percuma, teks yang banyak kesilapan, atau kutipan maklumat peribadi.",
-        "Modus operandi: The page appears designed to lure users into submitting personal details or messaging an operator before the scammer requests more sensitive information.": "Modus operandi: Laman ini kelihatan direka untuk memancing pengguna menyerahkan maklumat peribadi atau menghubungi operator sebelum scammer meminta maklumat yang lebih sensitif.",
-        "Why flagged: No major scam indicators were detected in the available URL and page text.": "Sebab disekat: Tiada petunjuk scam utama dikesan dalam URL dan teks laman yang tersedia.",
-        "Why blocked: No major scam indicators were detected in the available URL and page text.": "Sebab disekat: Tiada petunjuk scam utama dikesan dalam URL dan teks laman yang tersedia.",
-        "Modus operandi: No clear scam workflow was identified from the scanned content.": "Modus operandi: Tiada aliran scam yang jelas dikenal pasti daripada kandungan yang diimbas."
-    },
-    en: {}
-};
-
-const translationCache = new Map();
 let renderSequence = 0;
 
 function formatPercent(value) {
@@ -125,20 +56,16 @@ function formatPercent(value) {
     return `${Math.round(numeric * 100)}%`;
 }
 
-function getCopy(language) {
-    return UI_COPY[language] || UI_COPY[DEFAULT_LANGUAGE];
-}
-
-function formatMode(scan, copy) {
+function formatMode(scan) {
     if (!scan) {
-        return copy.notScanned;
+        return UI_COPY.notScanned;
     }
 
     if (scan.backendAvailable === false) {
-        return copy.localFallback;
+        return UI_COPY.localFallback;
     }
 
-    return scan.scanMode === "LIVE_BACKEND" ? copy.liveBackend : scan.scanMode || copy.liveBackend;
+    return scan.scanMode === "LIVE_BACKEND" ? UI_COPY.liveBackend : scan.scanMode || UI_COPY.liveBackend;
 }
 
 function setCardState(status) {
@@ -154,70 +81,13 @@ function setCardState(status) {
     }
 }
 
-function translateReasonLocally(text, language) {
-    if (language === "ms") {
-        return LOCAL_REASON_TRANSLATIONS.ms[text]
-            || text
-                .replace(/^Why flagged:/, "Sebab disekat:")
-                .replace(/^Why blocked:/, "Sebab disekat:")
-                .replace(/^Modus operandi:/, "Modus operandi:");
-    }
-
-    return LOCAL_REASON_TRANSLATIONS[language]?.[text] || text;
-}
-
-async function translateWithAi(text, language) {
-    if (!text || language === "en") {
-        return text;
-    }
-
-    const localTranslation = translateReasonLocally(text, language);
-    if (localTranslation !== text) {
-        return localTranslation;
-    }
-
-    const cacheKey = `${language}:${text}`;
-    if (translationCache.has(cacheKey)) {
-        return translationCache.get(cacheKey);
-    }
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 600);
-
-    try {
-        const response = await fetch(`${API_BASE_URL}/api/v1/translate-ui`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text, targetLanguage: language }),
-            signal: controller.signal
-        });
-
-        if (!response.ok) {
-            return text;
-        }
-
-        const data = await response.json();
-        const translated = data.translatedText || text;
-        translationCache.set(cacheKey, translated);
-        return translated;
-    } catch (error) {
-        return text;
-    } finally {
-        clearTimeout(timeoutId);
-    }
-}
-
-async function renderPopup(scan, language = DEFAULT_LANGUAGE) {
+function renderPopup(scan) {
     const currentRender = ++renderSequence;
-    const ui = getCopy(language);
     const status = (scan?.status || "WAITING").toUpperCase();
     const displayStatus = scan?.scanMode === "USER_BYPASS" ? "USER_BYPASS" : status;
-    const copy = ui.states[displayStatus] || ui.states.WAITING;
+    const copy = UI_COPY.states[displayStatus] || UI_COPY.states.WAITING;
     const riskScore = Number.isFinite(Number(scan?.riskScore)) ? Number(scan.riskScore) : 0;
-    const rawReason = scan?.reason || ui.reasonFallback;
-    const reason = displayStatus === "SCANNING"
-        ? rawReason
-        : await translateWithAi(rawReason, language);
+    const reason = scan?.reason || UI_COPY.reasonFallback;
 
     if (currentRender !== renderSequence) {
         return;
@@ -225,34 +95,39 @@ async function renderPopup(scan, language = DEFAULT_LANGUAGE) {
 
     setCardState(displayStatus);
 
-    document.getElementById("languageLabel").textContent = ui.languageLabel;
-    document.getElementById("riskScoreLabel").textContent = ui.riskScoreLabel;
-    document.getElementById("statusLabel").textContent = ui.statusLabel;
-    document.getElementById("confidenceTitle").textContent = ui.confidenceTitle;
-    document.getElementById("modeTitle").textContent = ui.modeTitle;
-    document.getElementById("domainTitle").textContent = ui.domainTitle;
-    document.getElementById("whyLabel").textContent = ui.whyLabel;
-    document.getElementById("privacyNote").textContent = ui.privacyNote;
+    document.getElementById("riskScoreLabel").textContent = UI_COPY.riskScoreLabel;
+    document.getElementById("statusLabel").textContent = UI_COPY.statusLabel;
+    document.getElementById("confidenceTitle").textContent = UI_COPY.confidenceTitle;
+    document.getElementById("modeTitle").textContent = UI_COPY.modeTitle;
+    document.getElementById("domainTitle").textContent = UI_COPY.domainTitle;
+    document.getElementById("whyLabel").textContent = displayStatus === "ALLOW"
+        ? UI_COPY.safeReminderLabel
+        : UI_COPY.whyLabel;
+    document.getElementById("privacyNote").textContent = UI_COPY.privacyNote;
+
     const scanButton = document.getElementById("scanButton");
     if (!scanButton.disabled) {
-        scanButton.textContent = ui.scanButton;
+        scanButton.textContent = UI_COPY.scanButton;
     }
+
     document.getElementById("statusTitle").textContent = copy.title;
     document.getElementById("statusSubtitle").textContent = copy.subtitle;
     document.getElementById("riskScore").textContent = scan ? `${Math.round(riskScore)}/100` : "--/100";
     document.getElementById("riskFill").style.width = scan ? `${Math.max(0, Math.min(100, riskScore))}%` : "0%";
-    document.getElementById("decisionLabel").textContent = scan ? displayStatus : ui.waitingDecision;
+    document.getElementById("decisionLabel").textContent = scan ? displayStatus : UI_COPY.waitingDecision;
     document.getElementById("confidenceLabel").textContent = formatPercent(scan?.confidence);
-    document.getElementById("modeLabel").textContent = formatMode(scan, ui);
-    document.getElementById("domainLabel").textContent = scan?.domain || ui.currentTab;
-    document.getElementById("reasonText").textContent = reason;
+    document.getElementById("modeLabel").textContent = formatMode(scan);
+    document.getElementById("domainLabel").textContent = scan?.domain || UI_COPY.currentTab;
+    document.getElementById("reasonText").textContent = displayStatus === "ALLOW"
+        ? UI_COPY.safeReminder
+        : displayStatus === "USER_BYPASS"
+            ? "You chose to continue anyway. This website might be a scam, so stay alert and avoid entering sensitive information."
+            : reason;
 }
 
 function refreshPopupState() {
-    chrome.storage.local.get(["lastScan", "uiLanguage"], data => {
-        const language = data.uiLanguage || DEFAULT_LANGUAGE;
-        document.getElementById("languageSelect").value = language;
-        renderPopup(data.lastScan, language);
+    chrome.storage.local.get(["lastScan"], data => {
+        renderPopup(data.lastScan);
     });
 }
 
@@ -260,21 +135,19 @@ function bindScanButton() {
     const button = document.getElementById("scanButton");
 
     button.addEventListener("click", () => {
-        const language = document.getElementById("languageSelect").value || DEFAULT_LANGUAGE;
-        const ui = getCopy(language);
         const originalText = button.textContent;
-        button.textContent = ui.scanButtonLoading;
+        button.textContent = UI_COPY.scanButtonLoading;
         button.disabled = true;
         renderPopup({
             status: "SCANNING",
             riskScore: 50,
             confidence: 0.5,
-            domain: language === "ms" ? "Memuat semula" : "Refreshing",
-            reason: ui.refreshingReason,
+            domain: "Refreshing",
+            reason: UI_COPY.refreshingReason,
             scanMode: "SCANNING",
             backendAvailable: true
-        }, language);
-        button.textContent = ui.scanButtonLoading;
+        });
+        button.textContent = UI_COPY.scanButtonLoading;
 
         chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
             if (tabs && tabs.length > 0 && tabs[0].id) {
@@ -297,9 +170,4 @@ function bindScanButton() {
 document.addEventListener("DOMContentLoaded", () => {
     refreshPopupState();
     bindScanButton();
-
-    document.getElementById("languageSelect").addEventListener("change", event => {
-        const language = event.target.value || DEFAULT_LANGUAGE;
-        chrome.storage.local.set({ uiLanguage: language }, refreshPopupState);
-    });
 });

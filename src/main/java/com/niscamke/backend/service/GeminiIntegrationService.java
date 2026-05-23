@@ -29,7 +29,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @Service
 public class GeminiIntegrationService {
 
-    private static final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=";
+    private static final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=";
 
     private static final List<String> BANK_KEYWORDS = List.of(
         "bimb", "bankislam", "cimb", "maybank", "rhb", "hongleong",
@@ -76,7 +76,7 @@ public class GeminiIntegrationService {
         "hongleongbank.com.my", "mybsn.com.my"
     );
 
-    @Value("${gemini.api.key}")
+    @Value("${gemini.api.key:}")
     private String apiKey;
 
     private final RestTemplate restTemplate = new RestTemplate();
@@ -96,12 +96,11 @@ public class GeminiIntegrationService {
     public GeminiAnalysis analyzeWithGeminiDetails(String domain, String pageText, String targetLanguage) {
         String normalizedDomain = domain == null ? "" : domain.toLowerCase(Locale.ROOT);
         int structuralRisk = calculateStructuralRisk(normalizedDomain, pageText);
-        boolean useMalay = targetLanguage != null && targetLanguage.toLowerCase(Locale.ROOT).startsWith("ms");
-        String languageName = useMalay ? "Malay (Bahasa Melayu)" : "English";
+        String languageName = "English";
 
         if (apiKey == null || apiKey.isBlank()) {
             System.err.println("[ScamShield Warning] Missing Gemini API key parameter config.");
-            return buildRuleBasedAnalysis(structuralRisk, useMalay);
+            return buildRuleBasedAnalysis(structuralRisk);
         }
 
         try {
@@ -140,7 +139,7 @@ public class GeminiIntegrationService {
             ResponseEntity<String> externalServiceApiResponse = restTemplate.postForEntity(targetUrlEndpoint, outboundHttpRequestEntity, String.class);
 
             if (externalServiceApiResponse.getStatusCode() == HttpStatus.OK && externalServiceApiResponse.getBody() != null) {
-                GeminiAnalysis analysis = parseGeminiAnalysisResponse(externalServiceApiResponse.getBody(), structuralRisk, useMalay);
+                GeminiAnalysis analysis = parseGeminiAnalysisResponse(externalServiceApiResponse.getBody(), structuralRisk);
                 if (!analysis.reasons().isEmpty()) {
                     return analysis;
                 }
@@ -151,7 +150,7 @@ public class GeminiIntegrationService {
             System.err.println("[ScamShield System Fault] Gemini API Connection Error: " + e.getMessage());
         }
 
-        return buildRuleBasedAnalysis(structuralRisk, useMalay);
+        return buildRuleBasedAnalysis(structuralRisk);
     }
     /**
      * Robust Gemini response parser with edge case handling.
@@ -229,7 +228,7 @@ public class GeminiIntegrationService {
         }
     }
 
-    private GeminiAnalysis parseGeminiAnalysisResponse(String responseBody, int structuralRisk, boolean useMalay) {
+    private GeminiAnalysis parseGeminiAnalysisResponse(String responseBody, int structuralRisk) {
         try {
             String rawOutput = extractGeminiText(responseBody);
             if (rawOutput.isBlank()) {
@@ -250,7 +249,7 @@ public class GeminiIntegrationService {
 
             List<String> reasons = new ArrayList<>();
             if (!whyFlagged.isBlank()) {
-                reasons.add((useMalay ? "Sebab disekat: " : "Why blocked: ") + whyFlagged);
+                reasons.add("Why blocked: " + whyFlagged);
             }
             if (!modusOperandi.isBlank()) {
                 reasons.add("Modus operandi: " + modusOperandi);
@@ -263,28 +262,7 @@ public class GeminiIntegrationService {
         }
     }
 
-    private GeminiAnalysis buildRuleBasedAnalysis(int structuralRisk, boolean useMalay) {
-        if (useMalay) {
-            if (structuralRisk >= 80) {
-                return new GeminiAnalysis(true, List.of(
-                        "Sebab disekat: Laman ini menggabungkan tanda scam berisiko tinggi seperti perkataan domain yang mencurigakan, umpan bantuan atau peranti percuma, teks yang banyak kesilapan, atau kutipan maklumat peribadi.",
-                        "Modus operandi: Laman ini kelihatan direka untuk memancing pengguna menyerahkan maklumat peribadi atau menghubungi operator sebelum scammer meminta maklumat yang lebih sensitif."
-                ));
-            }
-
-            if (structuralRisk >= 50) {
-                return new GeminiAnalysis(false, List.of(
-                        "Sebab disekat: Beberapa isyarat mencurigakan dikesan, tetapi buktinya belum cukup kuat untuk sekatan penuh.",
-                        "Modus operandi: Scammer sering menggunakan corak ini untuk membina kepercayaan sebelum meminta kelayakan log masuk, OTP, atau maklumat perhubungan."
-                ));
-            }
-
-            return new GeminiAnalysis(false, List.of(
-                    "Sebab disekat: Tiada petunjuk scam utama dikesan dalam URL dan teks laman yang tersedia.",
-                    "Modus operandi: Tiada aliran scam yang jelas dikenal pasti daripada kandungan yang diimbas."
-            ));
-        }
-
+    private GeminiAnalysis buildRuleBasedAnalysis(int structuralRisk) {
         if (structuralRisk >= 80) {
             return new GeminiAnalysis(true, List.of(
                     "Why blocked: The site combines high-risk scam signals such as suspicious domain wording, free-aid or device bait, typo-heavy text, or personal-contact collection.",
@@ -315,8 +293,7 @@ public class GeminiIntegrationService {
             return "";
         }
 
-        String normalizedLanguage = targetLanguage == null ? "ms" : targetLanguage.toLowerCase(Locale.ROOT);
-        String languageName = normalizedLanguage.startsWith("en") ? "English" : "Malay";
+        String languageName = "English";
 
         if (apiKey == null || apiKey.isBlank()) {
             return text;

@@ -261,7 +261,7 @@ function getTemporaryBypass(scannedUrl) {
                 confidence: bypass.confidence || 0.72,
                 decisionId: bypass.decisionId,
                 reasons: [
-                    "You chose to continue anyway. This page is still considered risky.",
+                    "This website might be a scam. You chose to continue anyway, so be careful and avoid entering sensitive information.",
                     bypass.reason || "Temporary user bypass is active for this page."
                 ],
                 evidenceSources: "USER_BYPASS"
@@ -449,25 +449,18 @@ function evaluateWithLocalRules(incomingMessage) {
 }
 
 function evaluateViaBackend(incomingMessage) {
-    return new Promise(resolve => {
-        chrome.storage.local.get(["uiLanguage"], data => {
-            resolve(data.uiLanguage || "ms");
-        });
-    })
-        .then(language => {
-            const structuredBackendPayload = {
-                url: incomingMessage.currentUrl,
-                pageText: incomingMessage.pageText,
-                clientTimestamp: new Date().toISOString(),
-                targetLanguage: language
-            };
+    const structuredBackendPayload = {
+        url: incomingMessage.currentUrl,
+        pageText: incomingMessage.pageText,
+        clientTimestamp: new Date().toISOString(),
+        targetLanguage: "en"
+    };
 
-            return fetch(LIVE_SCAMSHIELD_SCAN_ROUTE, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(structuredBackendPayload)
-            });
-        })
+    return fetch(LIVE_SCAMSHIELD_SCAN_ROUTE, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(structuredBackendPayload)
+    })
         .then(response => {
             if (!response.ok) {
                 throw new Error(`Upstream failure: ${response.status}`);
@@ -508,10 +501,8 @@ chrome.runtime.onMessage.addListener((incomingMessage, sender, dispatchVerdictCa
         }
 
         return LIVE_BACKEND_ENABLED
-            ? evaluateViaBackendWithRetry(incomingMessage).catch(error => {
-                return evaluateWithLocalRules(incomingMessage);
-            })
-            : evaluateWithLocalRules(incomingMessage);
+            ? evaluateViaBackendWithRetry(incomingMessage)
+            : Promise.reject(new Error("Live backend scanning is disabled."));
     });
 
     verdictPromise
