@@ -90,15 +90,12 @@ body {
 }
 
 .brand-mark {
-    display: grid;
-    place-items: center;
     width: 48px;
     height: 48px;
-    border-radius: 16px;
-    background: #10243e;
-    color: #ffffff;
-    font-weight: 900;
-    letter-spacing: -0.06em;
+    flex: 0 0 48px;
+    border-radius: 14px;
+    object-fit: cover;
+    box-shadow: 0 8px 18px rgba(0, 112, 80, 0.22);
 }
 
 .eyebrow {
@@ -256,18 +253,6 @@ button {
 button:disabled {
     cursor: wait;
     opacity: 0.72;
-}
-
-.state-allow .brand-mark {
-    background: var(--safe);
-}
-
-.state-warn .brand-mark {
-    background: var(--warn);
-}
-
-.state-block .brand-mark {
-    background: var(--danger);
 }
 
 .state-warn .reason-box {
