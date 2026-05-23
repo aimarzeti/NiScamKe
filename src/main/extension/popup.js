@@ -9,7 +9,7 @@ const UI_COPY = {
         confidenceTitle: "Keyakinan",
         modeTitle: "Mod",
         domainTitle: "Domain",
-        whyLabel: "Sebab",
+        whyLabel: "Sebab disekat",
         privacyNote: "Nota privasi: Ni Scam Ke? tidak akan meminta kata laluan, OTP, atau maklumat perbankan.",
         scanButton: "Imbas Laman Ini",
         scanButtonLoading: "Sedang mengimbas laman...",
@@ -34,7 +34,7 @@ const UI_COPY = {
                 subtitle: "Anda memilih untuk teruskan atas risiko sendiri. Laman ini masih dianggap mencurigakan."
             },
             BLOCK: {
-                title: "Laman berisiko tinggi",
+                title: "Ini Adalah Scam!",
                 subtitle: "Kami menghentikan laman ini kerana ia menyerupai cubaan scam atau phishing."
             },
             WAITING: {
@@ -54,7 +54,7 @@ const UI_COPY = {
         confidenceTitle: "Confidence",
         modeTitle: "Mode",
         domainTitle: "Domain",
-        whyLabel: "Why",
+        whyLabel: "Why blocked",
         privacyNote: "Privacy note: Ni Scam Ke? never asks for passwords, OTPs, or banking credentials.",
         scanButton: "Scan Current Page",
         scanButtonLoading: "Scanning current tab...",
@@ -79,7 +79,7 @@ const UI_COPY = {
                 subtitle: "You continued at your own risk. This page is still considered suspicious."
             },
             BLOCK: {
-                title: "High-risk page",
+                title: "This is a scam!",
                 subtitle: "We stopped this page because it looks like a scam or phishing attempt."
             },
             WAITING: {
@@ -102,7 +102,13 @@ const LOCAL_REASON_TRANSLATIONS = {
         "Some scam-like signals were found, but not enough to hard-block.": "Beberapa tanda seperti scam ditemui, tetapi belum cukup untuk sekatan penuh.",
         "This looks like a free-aid or free-device application scam.": "Ini kelihatan seperti scam permohonan bantuan atau peranti percuma.",
         "The page combines typo-filled application text with Telegram or personal-detail collection.": "Laman ini menggabungkan teks permohonan yang banyak kesilapan dengan kutipan Telegram atau maklumat peribadi.",
-        "Protection status is uncertain. Avoid entering passwords or OTPs here.": "Status perlindungan tidak pasti. Elakkan memasukkan kata laluan atau OTP di sini."
+        "Protection status is uncertain. Avoid entering passwords or OTPs here.": "Status perlindungan tidak pasti. Elakkan memasukkan kata laluan atau OTP di sini.",
+        "Why flagged: The site combines high-risk scam signals such as suspicious domain wording, free-aid or device bait, typo-heavy text, or personal-contact collection.": "Sebab disekat: Laman ini menggabungkan tanda scam berisiko tinggi seperti perkataan domain yang mencurigakan, umpan bantuan atau peranti percuma, teks yang banyak kesilapan, atau kutipan maklumat peribadi.",
+        "Why blocked: The site combines high-risk scam signals such as suspicious domain wording, free-aid or device bait, typo-heavy text, or personal-contact collection.": "Sebab disekat: Laman ini menggabungkan tanda scam berisiko tinggi seperti perkataan domain yang mencurigakan, umpan bantuan atau peranti percuma, teks yang banyak kesilapan, atau kutipan maklumat peribadi.",
+        "Modus operandi: The page appears designed to lure users into submitting personal details or messaging an operator before the scammer requests more sensitive information.": "Modus operandi: Laman ini kelihatan direka untuk memancing pengguna menyerahkan maklumat peribadi atau menghubungi operator sebelum scammer meminta maklumat yang lebih sensitif.",
+        "Why flagged: No major scam indicators were detected in the available URL and page text.": "Sebab disekat: Tiada petunjuk scam utama dikesan dalam URL dan teks laman yang tersedia.",
+        "Why blocked: No major scam indicators were detected in the available URL and page text.": "Sebab disekat: Tiada petunjuk scam utama dikesan dalam URL dan teks laman yang tersedia.",
+        "Modus operandi: No clear scam workflow was identified from the scanned content.": "Modus operandi: Tiada aliran scam yang jelas dikenal pasti daripada kandungan yang diimbas."
     },
     en: {}
 };
@@ -149,6 +155,14 @@ function setCardState(status) {
 }
 
 function translateReasonLocally(text, language) {
+    if (language === "ms") {
+        return LOCAL_REASON_TRANSLATIONS.ms[text]
+            || text
+                .replace(/^Why flagged:/, "Sebab disekat:")
+                .replace(/^Why blocked:/, "Sebab disekat:")
+                .replace(/^Modus operandi:/, "Modus operandi:");
+    }
+
     return LOCAL_REASON_TRANSLATIONS[language]?.[text] || text;
 }
 

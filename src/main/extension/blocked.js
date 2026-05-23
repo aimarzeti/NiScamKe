@@ -4,12 +4,13 @@ const DEFAULT_LANGUAGE = "ms";
 const UI_COPY = {
     ms: {
         languageLabel: "Bahasa",
-        pageTitle: "Potensi scam disekat",
+        pageTitle: "Laman web ini mempunyai unsur scam!",
+        blockedSubtitle: "Kami menyekat laman ini sebelum anda memasukkan maklumat peribadi, OTP, kata laluan, atau butiran bayaran.",
         blockedUrlLabel: "URL disekat",
         decisionIdLabel: "ID keputusan",
         riskScoreLabel: "Skor risiko",
         confidenceLabel: "Keyakinan",
-        whyTitle: "Sebab laman ini ditanda",
+        whyTitle: "Sebab disekat",
         privacyNote: "Ni Scam Ke? tidak akan meminta kata laluan, OTP, PIN, atau butiran kad penuh. Jika anda teruskan, anda menerima risiko sendiri.",
         goBackButton: "Kembali selamat",
         continueButton: "Teruskan juga",
@@ -33,12 +34,13 @@ const UI_COPY = {
     },
     en: {
         languageLabel: "Language",
-        pageTitle: "Potential scam blocked",
+        pageTitle: "This website has scam elements!",
+        blockedSubtitle: "We blocked this page before you entered personal details, OTPs, passwords, or payment information.",
         blockedUrlLabel: "Blocked URL",
         decisionIdLabel: "Decision ID",
         riskScoreLabel: "Risk score",
         confidenceLabel: "Confidence",
-        whyTitle: "Why this was flagged",
+        whyTitle: "Why blocked",
         privacyNote: "Ni Scam Ke? will never ask for your password, OTP, PIN, or full card details. If you continue, you accept the risk yourself.",
         goBackButton: "Go to safety",
         continueButton: "Continue anyway",
@@ -70,7 +72,13 @@ const LOCAL_TRANSLATIONS = {
         "The page combines typo-filled application text with Telegram or personal-detail collection.": "Laman ini menggabungkan teks permohonan yang banyak kesilapan dengan kutipan Telegram atau maklumat peribadi.",
         "This page offers free aid or devices while collecting contact details on an untrusted domain.": "Laman ini menawarkan bantuan atau peranti percuma sambil mengutip maklumat hubungan pada domain tidak dipercayai.",
         "Telegram-based application flows are a common scam pattern.": "Aliran permohonan melalui Telegram ialah corak scam yang biasa.",
-        "AI phishing analysis flagged suspicious signals.": "Analisis AI phishing menanda isyarat mencurigakan."
+        "AI phishing analysis flagged suspicious signals.": "Analisis AI phishing menanda isyarat mencurigakan.",
+        "Why flagged: The site combines high-risk scam signals such as suspicious domain wording, free-aid or device bait, typo-heavy text, or personal-contact collection.": "Sebab disekat: Laman ini menggabungkan tanda scam berisiko tinggi seperti perkataan domain yang mencurigakan, umpan bantuan atau peranti percuma, teks yang banyak kesilapan, atau kutipan maklumat peribadi.",
+        "Why blocked: The site combines high-risk scam signals such as suspicious domain wording, free-aid or device bait, typo-heavy text, or personal-contact collection.": "Sebab disekat: Laman ini menggabungkan tanda scam berisiko tinggi seperti perkataan domain yang mencurigakan, umpan bantuan atau peranti percuma, teks yang banyak kesilapan, atau kutipan maklumat peribadi.",
+        "Modus operandi: The page appears designed to lure users into submitting personal details or messaging an operator before the scammer requests more sensitive information.": "Modus operandi: Laman ini kelihatan direka untuk memancing pengguna menyerahkan maklumat peribadi atau menghubungi operator sebelum scammer meminta maklumat yang lebih sensitif.",
+        "Why flagged: No major scam indicators were detected in the available URL and page text.": "Sebab disekat: Tiada petunjuk scam utama dikesan dalam URL dan teks laman yang tersedia.",
+        "Why blocked: No major scam indicators were detected in the available URL and page text.": "Sebab disekat: Tiada petunjuk scam utama dikesan dalam URL dan teks laman yang tersedia.",
+        "Modus operandi: No clear scam workflow was identified from the scanned content.": "Modus operandi: Tiada aliran scam yang jelas dikenal pasti daripada kandungan yang diimbas."
     },
     en: {}
 };
@@ -83,6 +91,14 @@ function getCopy(language) {
 }
 
 function translateLocally(text, language) {
+    if (language === "ms") {
+        return LOCAL_TRANSLATIONS.ms[text]
+            || text
+                .replace(/^Why flagged:/, "Sebab disekat:")
+                .replace(/^Why blocked:/, "Sebab disekat:")
+                .replace(/^Modus operandi:/, "Modus operandi:");
+    }
+
     return LOCAL_TRANSLATIONS[language]?.[text] || text;
 }
 
@@ -200,14 +216,13 @@ document.addEventListener("DOMContentLoaded", () => {
         document.getElementById("reportReason").placeholder = ui.reportPlaceholder;
         document.getElementById("reportButton").textContent = ui.reportButton;
         blockedUrlEl.textContent = originalUrl || ui.unknownUrl;
-        const translatedSummary = await translateWithAi(reason, language);
         const translatedReasons = await Promise.all(reasons.map(text => translateWithAi(text, language)));
 
         if (currentRender !== languageRenderSequence) {
             return;
         }
 
-        summaryLineEl.textContent = translatedSummary;
+        summaryLineEl.textContent = ui.blockedSubtitle;
         sourceLineEl.textContent = `${ui.evidenceSource}: ${evidenceSources}`;
 
         riskPillEl.textContent = safeRiskScore >= 80

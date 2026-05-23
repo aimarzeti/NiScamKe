@@ -90,12 +90,18 @@ public class GeminiIntegrationService {
     }
 
     public GeminiAnalysis analyzeWithGeminiDetails(String domain, String pageText) {
+        return analyzeWithGeminiDetails(domain, pageText, "en");
+    }
+
+    public GeminiAnalysis analyzeWithGeminiDetails(String domain, String pageText, String targetLanguage) {
         String normalizedDomain = domain == null ? "" : domain.toLowerCase(Locale.ROOT);
         int structuralRisk = calculateStructuralRisk(normalizedDomain, pageText);
+        boolean useMalay = targetLanguage != null && targetLanguage.toLowerCase(Locale.ROOT).startsWith("ms");
+        String languageName = useMalay ? "Malay (Bahasa Melayu)" : "English";
 
         if (apiKey == null || apiKey.isBlank()) {
             System.err.println("[ScamShield Warning] Missing Gemini API key parameter config.");
-            return buildRuleBasedAnalysis(structuralRisk);
+            return buildRuleBasedAnalysis(structuralRisk, useMalay);
         }
 
         try {
@@ -104,6 +110,7 @@ public class GeminiIntegrationService {
                 "You are a cybersecurity expert specializing in phishing and scam detection. " +
                 "Analyze the following domain and page content for signs of phishing, impersonation, or scam. " +
                 "Consider domain spoofing, typosquatting, misspelled brand names, typo-filled forms, fake login forms, suspicious URLs, urgency, credential requests, free-aid or free-device bait, Telegram/WhatsApp contact collection, and application typos such as aplly. " +
+                "Write whyFlagged and modusOperandi in " + languageName + ". " +
                 "Respond with compact JSON only, no markdown, using this schema: " +
                 "{\"verdict\":\"SCAM or SAFE\",\"whyFlagged\":\"one sentence explaining the strongest evidence\",\"modusOperandi\":\"one sentence explaining how the scam works\"}.";
 
@@ -133,7 +140,7 @@ public class GeminiIntegrationService {
             ResponseEntity<String> externalServiceApiResponse = restTemplate.postForEntity(targetUrlEndpoint, outboundHttpRequestEntity, String.class);
 
             if (externalServiceApiResponse.getStatusCode() == HttpStatus.OK && externalServiceApiResponse.getBody() != null) {
-                GeminiAnalysis analysis = parseGeminiAnalysisResponse(externalServiceApiResponse.getBody(), structuralRisk);
+                GeminiAnalysis analysis = parseGeminiAnalysisResponse(externalServiceApiResponse.getBody(), structuralRisk, useMalay);
                 if (!analysis.reasons().isEmpty()) {
                     return analysis;
                 }
@@ -144,7 +151,7 @@ public class GeminiIntegrationService {
             System.err.println("[ScamShield System Fault] Gemini API Connection Error: " + e.getMessage());
         }
 
-        return buildRuleBasedAnalysis(structuralRisk);
+        return buildRuleBasedAnalysis(structuralRisk, useMalay);
     }
     /**
      * Robust Gemini response parser with edge case handling.
@@ -222,7 +229,7 @@ public class GeminiIntegrationService {
         }
     }
 
-    private GeminiAnalysis parseGeminiAnalysisResponse(String responseBody, int structuralRisk) {
+    private GeminiAnalysis parseGeminiAnalysisResponse(String responseBody, int structuralRisk, boolean useMalay) {
         try {
             String rawOutput = extractGeminiText(responseBody);
             if (rawOutput.isBlank()) {
@@ -243,7 +250,7 @@ public class GeminiIntegrationService {
 
             List<String> reasons = new ArrayList<>();
             if (!whyFlagged.isBlank()) {
-                reasons.add("Why flagged: " + whyFlagged);
+                reasons.add((useMalay ? "Sebab disekat: " : "Why blocked: ") + whyFlagged);
             }
             if (!modusOperandi.isBlank()) {
                 reasons.add("Modus operandi: " + modusOperandi);
@@ -256,23 +263,44 @@ public class GeminiIntegrationService {
         }
     }
 
-    private GeminiAnalysis buildRuleBasedAnalysis(int structuralRisk) {
+    private GeminiAnalysis buildRuleBasedAnalysis(int structuralRisk, boolean useMalay) {
+        if (useMalay) {
+            if (structuralRisk >= 80) {
+                return new GeminiAnalysis(true, List.of(
+                        "Sebab disekat: Laman ini menggabungkan tanda scam berisiko tinggi seperti perkataan domain yang mencurigakan, umpan bantuan atau peranti percuma, teks yang banyak kesilapan, atau kutipan maklumat peribadi.",
+                        "Modus operandi: Laman ini kelihatan direka untuk memancing pengguna menyerahkan maklumat peribadi atau menghubungi operator sebelum scammer meminta maklumat yang lebih sensitif."
+                ));
+            }
+
+            if (structuralRisk >= 50) {
+                return new GeminiAnalysis(false, List.of(
+                        "Sebab disekat: Beberapa isyarat mencurigakan dikesan, tetapi buktinya belum cukup kuat untuk sekatan penuh.",
+                        "Modus operandi: Scammer sering menggunakan corak ini untuk membina kepercayaan sebelum meminta kelayakan log masuk, OTP, atau maklumat perhubungan."
+                ));
+            }
+
+            return new GeminiAnalysis(false, List.of(
+                    "Sebab disekat: Tiada petunjuk scam utama dikesan dalam URL dan teks laman yang tersedia.",
+                    "Modus operandi: Tiada aliran scam yang jelas dikenal pasti daripada kandungan yang diimbas."
+            ));
+        }
+
         if (structuralRisk >= 80) {
             return new GeminiAnalysis(true, List.of(
-                    "Why flagged: The site combines high-risk scam signals such as suspicious domain wording, free-aid or device bait, typo-heavy text, or personal-contact collection.",
+                    "Why blocked: The site combines high-risk scam signals such as suspicious domain wording, free-aid or device bait, typo-heavy text, or personal-contact collection.",
                     "Modus operandi: The page appears designed to lure users into submitting personal details or messaging an operator before the scammer requests more sensitive information."
             ));
         }
 
         if (structuralRisk >= 50) {
             return new GeminiAnalysis(false, List.of(
-                    "Why flagged: Some suspicious signals were detected, but the evidence is not strong enough for a full block.",
+                    "Why blocked: Some suspicious signals were detected, but the evidence is not strong enough for a full block.",
                     "Modus operandi: Scammers often use this pattern to build trust before asking for credentials, OTPs, or contact details."
             ));
         }
 
         return new GeminiAnalysis(false, List.of(
-                "Why flagged: No major scam indicators were detected in the available URL and page text.",
+                "Why blocked: No major scam indicators were detected in the available URL and page text.",
                 "Modus operandi: No clear scam workflow was identified from the scanned content."
         ));
     }

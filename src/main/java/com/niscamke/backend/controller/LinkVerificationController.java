@@ -149,6 +149,7 @@ public class LinkVerificationController {
         private String url;
         private String pageText;
         private String clientTimestamp;
+        private String targetLanguage;
     }
 
     @Data

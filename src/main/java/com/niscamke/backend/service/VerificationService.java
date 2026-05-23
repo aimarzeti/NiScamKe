@@ -92,7 +92,7 @@ public class VerificationService {
                 ? new GeminiAnalysis(true, List.of(
                         "Why flagged: This domain is already listed in the community scam registry.",
                         "Modus operandi: Previously reported scam domains are commonly reused to collect credentials, OTPs, payments, or personal contact details."))
-                : geminiIntegrationService.analyzeWithGeminiDetails(domain, request.getPageText());
+                : geminiIntegrationService.analyzeWithGeminiDetails(domain, request.getPageText(), request.getTargetLanguage());
         boolean aiScam = knownScam || geminiAnalysis.scam();
 
         int riskScore = knownScam ? 95 : structuralRisk;
@@ -113,6 +113,7 @@ public class VerificationService {
                         ? "AI phishing analysis flagged suspicious signals."
                         : "No significant phishing indicators detected.")
                 : geminiAnalysis.reasons();
+        reasons = localizeReasons(reasons, request.getTargetLanguage());
 
         String reason = knownScam
                 ? "Known scam domain from community intelligence."
@@ -306,6 +307,55 @@ public class VerificationService {
                 reasons,
                 log.getEvidenceSources(),
                 ttlSeconds);
+    }
+
+    private List<String> localizeReasons(List<String> reasons, String targetLanguage) {
+        if (targetLanguage == null || !targetLanguage.toLowerCase(Locale.ROOT).startsWith("ms")) {
+            return reasons;
+        }
+
+        return reasons.stream()
+                .map(this::localizeReasonToMalay)
+                .toList();
+    }
+
+    private String localizeReasonToMalay(String reason) {
+        return switch (reason) {
+            case "Why flagged: The site combines high-risk scam signals such as suspicious domain wording, free-aid or device bait, typo-heavy text, or personal-contact collection." ->
+                    "Sebab disekat: Laman ini menggabungkan tanda scam berisiko tinggi seperti perkataan domain yang mencurigakan, umpan bantuan atau peranti percuma, teks yang banyak kesilapan, atau kutipan maklumat peribadi.";
+            case "Why blocked: The site combines high-risk scam signals such as suspicious domain wording, free-aid or device bait, typo-heavy text, or personal-contact collection." ->
+                    "Sebab disekat: Laman ini menggabungkan tanda scam berisiko tinggi seperti perkataan domain yang mencurigakan, umpan bantuan atau peranti percuma, teks yang banyak kesilapan, atau kutipan maklumat peribadi.";
+            case "Sebab disekat: Laman ini menggabungkan tanda scam berisiko tinggi seperti perkataan domain yang mencurigakan, umpan bantuan atau peranti percuma, teks yang banyak kesilapan, atau kutipan maklumat peribadi." ->
+                    reason;
+            case "Modus operandi: The page appears designed to lure users into submitting personal details or messaging an operator before the scammer requests more sensitive information." ->
+                    "Modus operandi: Laman ini kelihatan direka untuk memancing pengguna menyerahkan maklumat peribadi atau menghubungi operator sebelum scammer meminta maklumat yang lebih sensitif.";
+            case "Known scam domain from community intelligence." ->
+                    "Sebab disekat: Domain ini sudah tersenarai dalam pangkalan data komuniti sebagai scam.";
+            case "Why flagged: This domain is already listed in the community scam registry." ->
+                    "Sebab disekat: Domain ini sudah tersenarai dalam pendaftaran scam komuniti.";
+            case "Modus operandi: Previously reported scam domains are commonly reused to collect credentials, OTPs, payments, or personal contact details." ->
+                    "Modus operandi: Domain scam yang pernah dilaporkan sering digunakan semula untuk mengutip kelayakan log masuk, OTP, bayaran, atau maklumat perhubungan peribadi.";
+            case "AI phishing analysis flagged suspicious signals." ->
+                    "Sebab disekat: Analisis AI phishing mengesan isyarat mencurigakan.";
+            case "No significant phishing indicators detected." ->
+                    "Tiada petunjuk phishing yang ketara dikesan.";
+            case "Why flagged: No major scam indicators were detected in the available URL and page text." ->
+                    "Sebab disekat: Tiada petunjuk scam utama dikesan dalam URL dan teks laman yang tersedia.";
+            case "Why blocked: No major scam indicators were detected in the available URL and page text." ->
+                    "Sebab disekat: Tiada petunjuk scam utama dikesan dalam URL dan teks laman yang tersedia.";
+            case "Modus operandi: No clear scam workflow was identified from the scanned content." ->
+                    "Modus operandi: Tiada aliran scam yang jelas dikenal pasti daripada kandungan yang diimbas.";
+            case "Why flagged: Some suspicious signals were detected, but the evidence is not strong enough for a full block." ->
+                    "Sebab disekat: Beberapa isyarat mencurigakan dikesan, tetapi buktinya belum cukup kuat untuk sekatan penuh.";
+            case "Why blocked: Some suspicious signals were detected, but the evidence is not strong enough for a full block." ->
+                    "Sebab disekat: Beberapa isyarat mencurigakan dikesan, tetapi buktinya belum cukup kuat untuk sekatan penuh.";
+            case "Modus operandi: Scammers often use this pattern to build trust before asking for credentials, OTPs, or contact details." ->
+                    "Modus operandi: Scammer sering menggunakan corak ini untuk membina kepercayaan sebelum meminta kelayakan log masuk, OTP, atau maklumat perhubungan.";
+            default -> reason
+                    .replaceFirst("^Why flagged:", "Sebab disekat:")
+                    .replaceFirst("^Why blocked:", "Sebab disekat:")
+                    .replaceFirst("^Modus operandi:", "Modus operandi:");
+        };
     }
 
     private String extractDomainName(String urlString) {
