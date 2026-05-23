@@ -1,6 +1,7 @@
 package com.niscamke.backend.service;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -12,12 +13,14 @@ import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriUtils;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -30,6 +33,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class GeminiIntegrationService {
 
     private static final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=";
+    private static final int GEMINI_MAX_ATTEMPTS = 2;
+    private static final int CONNECT_TIMEOUT_MILLIS = (int) Duration.ofSeconds(3).toMillis();
+    private static final int READ_TIMEOUT_MILLIS = (int) Duration.ofSeconds(8).toMillis();
 
     private static final List<String> BANK_KEYWORDS = List.of(
         "bimb", "bankislam", "cimb", "maybank", "rhb", "hongleong",
@@ -83,8 +89,17 @@ public class GeminiIntegrationService {
     @Value("${gemini.api.key:}")
     private String apiKey;
 
-    private final RestTemplate restTemplate = new RestTemplate();
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
+
+    public GeminiIntegrationService() {
+        this(createRestTemplate(), new ObjectMapper());
+    }
+
+    GeminiIntegrationService(RestTemplate restTemplate, ObjectMapper objectMapper) {
+        this.restTemplate = restTemplate;
+        this.objectMapper = objectMapper;
+    }
 
     public record GeminiAnalysis(boolean scam, List<String> reasons) {
     }
@@ -100,58 +115,39 @@ public class GeminiIntegrationService {
     public GeminiAnalysis analyzeWithGeminiDetails(String domain, String pageText, String targetLanguage) {
         String normalizedDomain = domain == null ? "" : domain.toLowerCase(Locale.ROOT);
         int structuralRisk = calculateStructuralRisk(normalizedDomain, pageText);
-        String languageName = "English";
+        String languageName = resolveLanguageName(targetLanguage);
+        String resolvedApiKey = resolveApiKey();
 
-        if (apiKey == null || apiKey.isBlank()) {
+        if (resolvedApiKey.isBlank()) {
             System.err.println("[ScamShield Warning] Missing Gemini API key parameter config.");
             return buildRuleBasedAnalysis(structuralRisk, normalizedDomain, pageText);
         }
 
-        try {
-            String targetUrlEndpoint = GEMINI_API_URL + apiKey;
-            String systemInstructionPrompt =
-                "You are a cybersecurity expert specializing in phishing and scam detection. " +
-                "Analyze the following domain and page content for signs of phishing, impersonation, or scam. " +
-                "Consider domain spoofing, typosquatting, misspelled brand names, typo-filled forms, fake login forms, suspicious URLs, urgency, credential requests, free-aid or free-device bait, Telegram/WhatsApp contact collection, and application typos such as aplly. " +
-                "Write whyFlagged and modusOperandi in " + languageName + ". " +
-                "Respond with compact JSON only, no markdown, using this schema: " +
-                "{\"verdict\":\"SCAM or SAFE\",\"whyFlagged\":\"one sentence explaining the strongest evidence\",\"modusOperandi\":\"one sentence explaining how the scam works\"}.";
+        String targetUrlEndpoint = buildGeminiUrl(resolvedApiKey);
+        HttpEntity<Map<String, Object>> outboundHttpRequestEntity = new HttpEntity<>(
+                buildAnalysisRequestBody(normalizedDomain, pageText, structuralRisk, languageName),
+                jsonHeaders());
 
-            String analyticalPayload = String.format(
-                "Domain: %s\nStructural risk score: %d/100\nPage Text: %s",
-                normalizedDomain,
-                structuralRisk,
-                (pageText != null && pageText.length() > 800) ? pageText.substring(0, 800) : pageText
-            );
+        for (int attempt = 1; attempt <= GEMINI_MAX_ATTEMPTS; attempt++) {
+            try {
+                ResponseEntity<String> externalServiceApiResponse = restTemplate.postForEntity(targetUrlEndpoint, outboundHttpRequestEntity, String.class);
 
-            Map<String, Object> requestBodyMap = new HashMap<>();
-            Map<String, Object> systemInstruction = new HashMap<>();
-            systemInstruction.put("parts", Collections.singletonList(Map.of("text", systemInstructionPrompt)));
-            requestBodyMap.put("systemInstruction", systemInstruction);
-            requestBodyMap.put("contents", Collections.singletonList(Map.of(
-                "role", "user",
-                "parts", Collections.singletonList(Map.of("text", analyticalPayload))
-            )));
-            requestBodyMap.put("generationConfig", Map.of(
-                "temperature", 0.0,
-                "maxOutputTokens", 260
-            ));
-
-            HttpHeaders standardHeaders = new HttpHeaders();
-            standardHeaders.setContentType(MediaType.APPLICATION_JSON);
-            HttpEntity<Map<String, Object>> outboundHttpRequestEntity = new HttpEntity<>(requestBodyMap, standardHeaders);
-            ResponseEntity<String> externalServiceApiResponse = restTemplate.postForEntity(targetUrlEndpoint, outboundHttpRequestEntity, String.class);
-
-            if (externalServiceApiResponse.getStatusCode() == HttpStatus.OK && externalServiceApiResponse.getBody() != null) {
-                GeminiAnalysis analysis = parseGeminiAnalysisResponse(externalServiceApiResponse.getBody(), structuralRisk);
-                if (!analysis.reasons().isEmpty()) {
-                    return analysis;
+                if (externalServiceApiResponse.getStatusCode().is2xxSuccessful() && externalServiceApiResponse.getBody() != null) {
+                    GeminiAnalysis analysis = parseGeminiAnalysisResponse(externalServiceApiResponse.getBody(), structuralRisk);
+                    if (!analysis.reasons().isEmpty()) {
+                        return analysis;
+                    }
+                    System.err.println("[ScamShield Parser] Gemini response did not contain enough usable analysis.");
+                    break;
                 }
-            } else {
-                System.err.println("[ScamShield] Unexpected HTTP status: " + externalServiceApiResponse.getStatusCode());
+
+                System.err.println("[ScamShield] Unexpected Gemini HTTP status: " + externalServiceApiResponse.getStatusCode());
+                if (!isRetryableStatus(externalServiceApiResponse.getStatusCode())) {
+                    break;
+                }
+            } catch (RestClientException e) {
+                System.err.println("[ScamShield System Fault] Gemini API attempt " + attempt + " failed: " + e.getMessage());
             }
-        } catch (RestClientException e) {
-            System.err.println("[ScamShield System Fault] Gemini API Connection Error: " + e.getMessage());
         }
 
         return buildRuleBasedAnalysis(structuralRisk, normalizedDomain, pageText);
@@ -239,17 +235,23 @@ public class GeminiIntegrationService {
                 return new GeminiAnalysis(structuralRisk >= 40, List.of());
             }
 
-            String cleanedOutput = rawOutput
-                    .replaceAll("(?i)^```json\\s*", "")
-                    .replaceAll("(?i)^```\\s*", "")
-                    .replaceAll("\\s*```$", "")
-                    .trim();
+            String cleanedOutput = cleanGeminiText(rawOutput);
+
+            if (!cleanedOutput.startsWith("{")) {
+                boolean scam = parseVerdictText(cleanedOutput, structuralRisk);
+                return new GeminiAnalysis(scam, List.of(
+                        scam
+                                ? "Why blocked: Gemini flagged this page as suspicious based on the supplied URL and page text."
+                                : "Why blocked: Gemini did not identify strong scam indicators in the supplied URL and page text.",
+                        "Modus operandi: No structured explanation was returned, so local safeguards will continue monitoring URL and content signals."
+                ));
+            }
 
             JsonNode analysisNode = objectMapper.readTree(cleanedOutput);
             String verdict = analysisNode.path("verdict").asText("").trim().toUpperCase(Locale.ROOT);
             String whyFlagged = analysisNode.path("whyFlagged").asText("").trim();
             String modusOperandi = analysisNode.path("modusOperandi").asText("").trim();
-            boolean scam = "SCAM".equals(verdict) || structuralRisk >= 40;
+            boolean scam = parseVerdictText(verdict, structuralRisk);
 
             List<String> reasons = new ArrayList<>();
             if (!whyFlagged.isBlank()) {
@@ -264,6 +266,38 @@ public class GeminiIntegrationService {
             System.err.println("[ScamShield Parser] Error parsing Gemini analysis response: " + e.getMessage());
             return new GeminiAnalysis(structuralRisk >= 40, List.of());
         }
+    }
+
+    private Map<String, Object> buildAnalysisRequestBody(String normalizedDomain, String pageText, int structuralRisk, String languageName) {
+        String systemInstructionPrompt =
+            "You are a cybersecurity expert specializing in phishing and scam detection. " +
+            "Analyze the following domain and page content for signs of phishing, impersonation, or scam. " +
+            "Consider domain spoofing, typosquatting, misspelled brand names, typo-filled forms, fake login forms, suspicious URLs, urgency, credential requests, free-aid or free-device bait, Telegram/WhatsApp contact collection, and application typos such as aplly. " +
+            "Write whyFlagged and modusOperandi in " + languageName + ". " +
+            "Respond with compact JSON only, no markdown, using this schema: " +
+            "{\"verdict\":\"SCAM or SAFE\",\"whyFlagged\":\"one sentence explaining the strongest evidence\",\"modusOperandi\":\"one sentence explaining how the scam works\"}.";
+
+        String analyticalPayload = String.format(
+            "Domain: %s\nStructural risk score: %d/100\nPage Text: %s",
+            normalizedDomain,
+            structuralRisk,
+            truncate(pageText, 800)
+        );
+
+        Map<String, Object> requestBodyMap = new HashMap<>();
+        Map<String, Object> systemInstruction = new HashMap<>();
+        systemInstruction.put("parts", Collections.singletonList(Map.of("text", systemInstructionPrompt)));
+        requestBodyMap.put("systemInstruction", systemInstruction);
+        requestBodyMap.put("contents", Collections.singletonList(Map.of(
+            "role", "user",
+            "parts", Collections.singletonList(Map.of("text", analyticalPayload))
+        )));
+        requestBodyMap.put("generationConfig", Map.of(
+            "temperature", 0.0,
+            "maxOutputTokens", 260,
+            "responseMimeType", "application/json"
+        ));
+        return requestBodyMap;
     }
 
     private GeminiAnalysis buildRuleBasedAnalysis(int structuralRisk, String normalizedDomain, String pageText) {
@@ -311,14 +345,15 @@ public class GeminiIntegrationService {
             return "";
         }
 
-        String languageName = "English";
+        String languageName = resolveLanguageName(targetLanguage);
+        String resolvedApiKey = resolveApiKey();
 
-        if (apiKey == null || apiKey.isBlank()) {
+        if (resolvedApiKey.isBlank()) {
             return text;
         }
 
         try {
-            String targetUrlEndpoint = GEMINI_API_URL + apiKey;
+            String targetUrlEndpoint = buildGeminiUrl(resolvedApiKey);
             String systemInstructionPrompt =
                 "You translate browser safety UI copy for a Malaysian anti-scam extension. " +
                 "Translate the user's text into " + languageName + ". Keep cybersecurity meaning accurate, concise, and natural. " +
@@ -337,12 +372,10 @@ public class GeminiIntegrationService {
                 "maxOutputTokens", 140
             ));
 
-            HttpHeaders standardHeaders = new HttpHeaders();
-            standardHeaders.setContentType(MediaType.APPLICATION_JSON);
-            HttpEntity<Map<String, Object>> outboundHttpRequestEntity = new HttpEntity<>(requestBodyMap, standardHeaders);
+            HttpEntity<Map<String, Object>> outboundHttpRequestEntity = new HttpEntity<>(requestBodyMap, jsonHeaders());
             ResponseEntity<String> externalServiceApiResponse = restTemplate.postForEntity(targetUrlEndpoint, outboundHttpRequestEntity, String.class);
 
-            if (externalServiceApiResponse.getStatusCode() == HttpStatus.OK && externalServiceApiResponse.getBody() != null) {
+            if (externalServiceApiResponse.getStatusCode().is2xxSuccessful() && externalServiceApiResponse.getBody() != null) {
                 String translated = extractGeminiText(externalServiceApiResponse.getBody());
                 return translated.isBlank() ? text : translated;
             }
@@ -530,8 +563,91 @@ public class GeminiIntegrationService {
     }
 
     public void connectToGemini() {
-        String fullUrl = GEMINI_API_URL + (apiKey == null ? "<missing-key>" : apiKey);
+        String resolvedApiKey = resolveApiKey();
+        String fullUrl = GEMINI_API_URL + (resolvedApiKey.isBlank() ? "<missing-key>" : "<configured>");
         System.out.println("[ScamShield Init] Gemini API endpoint target configured: " + fullUrl);
+    }
+
+    private static RestTemplate createRestTemplate() {
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(CONNECT_TIMEOUT_MILLIS);
+        requestFactory.setReadTimeout(READ_TIMEOUT_MILLIS);
+        return new RestTemplate(requestFactory);
+    }
+
+    private HttpHeaders jsonHeaders() {
+        HttpHeaders standardHeaders = new HttpHeaders();
+        standardHeaders.setContentType(MediaType.APPLICATION_JSON);
+        return standardHeaders;
+    }
+
+    private String resolveApiKey() {
+        if (apiKey != null && !apiKey.isBlank()) {
+            return apiKey.trim();
+        }
+
+        String environmentKey = System.getenv("GEMINI_API_KEY");
+        if (environmentKey != null && !environmentKey.isBlank()) {
+            return environmentKey.trim();
+        }
+
+        String systemPropertyKey = System.getProperty("GEMINI_API_KEY");
+        return systemPropertyKey == null ? "" : systemPropertyKey.trim();
+    }
+
+    private String buildGeminiUrl(String resolvedApiKey) {
+        return GEMINI_API_URL + UriUtils.encodeQueryParam(resolvedApiKey, java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    private boolean isRetryableStatus(HttpStatusCode status) {
+        return status.value() == 429 || status.is5xxServerError();
+    }
+
+    private String resolveLanguageName(String targetLanguage) {
+        if (targetLanguage == null || targetLanguage.isBlank()) {
+            return "English";
+        }
+
+        return switch (targetLanguage.trim().toLowerCase(Locale.ROOT)) {
+            case "ms", "my", "malay", "bahasa", "bahasa malaysia", "bahasa melayu" -> "Bahasa Malaysia";
+            case "zh", "zh-cn", "zh-hans", "chinese", "mandarin" -> "Simplified Chinese";
+            case "ta", "tamil" -> "Tamil";
+            default -> "English";
+        };
+    }
+
+    private String truncate(String text, int maxLength) {
+        if (text == null) {
+            return "";
+        }
+        return text.length() > maxLength ? text.substring(0, maxLength) : text;
+    }
+
+    private String cleanGeminiText(String rawOutput) {
+        String cleanedOutput = rawOutput
+                .replaceAll("(?i)^```json\\s*", "")
+                .replaceAll("(?i)^```\\s*", "")
+                .replaceAll("\\s*```$", "")
+                .trim();
+
+        int jsonStart = cleanedOutput.indexOf('{');
+        int jsonEnd = cleanedOutput.lastIndexOf('}');
+        if (jsonStart >= 0 && jsonEnd > jsonStart) {
+            return cleanedOutput.substring(jsonStart, jsonEnd + 1);
+        }
+
+        return cleanedOutput;
+    }
+
+    private boolean parseVerdictText(String text, int structuralRisk) {
+        String normalized = text == null ? "" : text.trim().toUpperCase(Locale.ROOT).replaceAll("[^A-Z]", "");
+        if (normalized.contains("SCAM")) {
+            return true;
+        }
+        if (normalized.contains("SAFE")) {
+            return false;
+        }
+        return structuralRisk >= 40;
     }
 }
 

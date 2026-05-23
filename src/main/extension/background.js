@@ -146,14 +146,6 @@ function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function createLocalDecisionId() {
-    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-        return `local-${crypto.randomUUID()}`;
-    }
-
-    return `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
 function normalizeHost(rawUrl) {
     try {
         const parsed = new URL(rawUrl);
@@ -238,7 +230,6 @@ function normalizeVerdictPayload(rawVerdict, scannedUrl, options = {}) {
         reasons,
         riskScore,
         confidence: toNumber(rawVerdict.confidence, status === "BLOCK" ? 0.95 : status === "WARN" ? 0.76 : 0.92),
-        decisionId: rawVerdict.decisionId || createLocalDecisionId(),
         evidenceSources: rawVerdict.evidenceSources || options.evidenceSources || "RULE_ENGINE",
         scanMode: options.scanMode || rawVerdict.scanMode || "LIVE_BACKEND",
         backendAvailable: options.backendAvailable !== false,
@@ -271,7 +262,6 @@ function getTemporaryBypass(scannedUrl) {
                 status: "WARN",
                 riskScore: bypass.riskScore || 85,
                 confidence: bypass.confidence || 0.72,
-                decisionId: bypass.decisionId,
                 reasons: [
                     "This website might be a scam. You chose to continue anyway, so be careful and avoid entering sensitive information.",
                     bypass.reason || "Temporary user bypass is active for this page."

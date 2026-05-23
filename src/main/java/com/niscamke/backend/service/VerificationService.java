@@ -97,7 +97,6 @@ public class VerificationService {
             return scanUrlInternal(request);
         } catch (RuntimeException ex) {
             return new ScanResponse(
-                    "failsafe-" + System.currentTimeMillis(),
                     "WARN",
                     50,
                     0.55,
@@ -133,7 +132,10 @@ public class VerificationService {
                 : knownScam
                 ? "Community registry status: this domain is already listed as a scam. Explain why it is blocked and what the scam is trying to do. Page text: " + pageText
                 : pageText;
-        GeminiAnalysis geminiAnalysis = geminiIntegrationService.analyzeWithGeminiDetails(domain, geminiContext, "en");
+        String targetLanguage = request.getTargetLanguage() == null || request.getTargetLanguage().isBlank()
+                ? "en"
+                : request.getTargetLanguage();
+        GeminiAnalysis geminiAnalysis = geminiIntegrationService.analyzeWithGeminiDetails(domain, geminiContext, targetLanguage);
         boolean aiScam = !trustedDomain && (knownScam || geminiAnalysis.scam());
 
         int riskScore = trustedDomain ? 8 : knownScam ? 95 : structuralRisk;
@@ -148,7 +150,7 @@ public class VerificationService {
         double confidence = trustedDomain ? 0.97 : riskScore >= 80 ? 0.95 : (riskScore >= 50 ? 0.75 : 0.92);
 
         List<String> reasons = trustedDomain
-                ? List.of("Trusted official domain. Stay alert and verify the URL before entering sensitive details.")
+                ? mergeTrustedReasons(geminiAnalysis.reasons())
                 : geminiAnalysis.reasons().isEmpty()
                 ? List.of(knownScam
                         ? "Known scam domain from community intelligence."
@@ -343,13 +345,23 @@ public class VerificationService {
 
     private ScanResponse mapLogToScanResponse(DecisionLog log, String decision, List<String> reasons, int ttlSeconds) {
         return new ScanResponse(
-                log.getPublicId(),
                 decision,
                 log.getRiskScore(),
                 log.getConfidence(),
                 reasons,
                 log.getEvidenceSources(),
                 ttlSeconds);
+    }
+
+    private List<String> mergeTrustedReasons(List<String> geminiReasons) {
+        if (geminiReasons == null || geminiReasons.isEmpty()) {
+            return List.of("Trusted official domain. Stay alert and verify the URL before entering sensitive details.");
+        }
+
+        java.util.ArrayList<String> reasons = new java.util.ArrayList<>();
+        reasons.add("Trusted official domain. Stay alert and verify the URL before entering sensitive details.");
+        reasons.addAll(geminiReasons);
+        return reasons;
     }
 
     private String extractDomainName(String urlString) {

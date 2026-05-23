@@ -156,7 +156,6 @@ public class LinkVerificationController {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class ScanResponse {
-        private String decisionId;
         private String decision;
         private Integer riskScore;
         private Double confidence;

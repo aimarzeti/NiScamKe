@@ -4,7 +4,7 @@ const UI_COPY = {
     confidenceTitle: "Confidence",
     modeTitle: "Mode",
     domainTitle: "Domain",
-    whyLabel: "Why blocked",
+    whyLabel: "Gemini AI findings",
     safeReminderLabel: "Stay alert",
     safeReminder: "This page looks safe, but always check the URL and avoid entering sensitive details unless you fully trust the site.",
     privacyNote: "Privacy note: Ni Scam Ke? never asks for passwords, OTPs, or banking credentials.",
@@ -88,6 +88,9 @@ function renderPopup(scan) {
     const copy = UI_COPY.states[displayStatus] || UI_COPY.states.WAITING;
     const riskScore = Number.isFinite(Number(scan?.riskScore)) ? Number(scan.riskScore) : 0;
     const reason = scan?.reason || UI_COPY.reasonFallback;
+    const findings = Array.isArray(scan?.reasons)
+        ? scan.reasons.filter(Boolean).slice(0, 3)
+        : [];
 
     if (currentRender !== renderSequence) {
         return;
@@ -123,6 +126,18 @@ function renderPopup(scan) {
         : displayStatus === "USER_BYPASS"
             ? "You chose to continue anyway. This website might be a scam, so stay alert and avoid entering sensitive information."
             : reason;
+
+    const findingsList = document.getElementById("findingsList");
+    findingsList.innerHTML = "";
+    const showFindings = displayStatus !== "ALLOW" && displayStatus !== "USER_BYPASS" && findings.length > 1;
+    findingsList.hidden = !showFindings;
+    if (showFindings) {
+        findings.slice(1).forEach(finding => {
+            const item = document.createElement("li");
+            item.textContent = finding;
+            findingsList.appendChild(item);
+        });
+    }
 }
 
 function refreshPopupState() {

@@ -42,7 +42,9 @@ function formatEvidenceSources(evidenceSources) {
         LOCAL_RISK_RULES: "local risk rules",
         LOCAL_RULE_ENGINE: "local rule engine",
         LOCAL_TRUST_LIST: "local trusted list",
-        LOCAL_TYPOSQUATTING_RULES: "local typosquatting rules"
+        LOCAL_TYPOSQUATTING_RULES: "local typosquatting rules",
+        BACKEND_FAILSAFE: "backend failsafe",
+        TRUSTED_ALLOWLIST: "trusted allowlist"
     };
 
     return String(evidenceSources || "AI_MODEL")
@@ -57,14 +59,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const params = new URLSearchParams(window.location.search);
     const originalUrl = params.get("blocked") || "";
     const reason = params.get("reason") || "Gemini AI flagged suspicious scam signals.";
-    const decisionId = params.get("decisionId") || "Not available";
     const evidenceSources = params.get("sources") || "AI_MODEL";
     const riskScore = Number(params.get("riskScore"));
     const confidence = params.get("confidence");
     const reasons = decodeReasons(params.get("reasons"), reason);
 
     const blockedUrlEl = document.getElementById("blockedUrl");
-    const decisionIdEl = document.getElementById("decisionId");
     const riskScoreEl = document.getElementById("riskScore");
     const confidenceEl = document.getElementById("confidence");
     const reasonsListEl = document.getElementById("reasonsList");
@@ -77,12 +77,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const safeRiskScore = Number.isFinite(riskScore) ? Math.max(0, Math.min(100, riskScore)) : 85;
 
     blockedUrlEl.textContent = originalUrl || "Unknown URL";
-    decisionIdEl.textContent = decisionId;
     riskScoreEl.textContent = `${safeRiskScore}/100`;
     confidenceEl.textContent = formatPercent(confidence);
     riskFillEl.style.width = `${safeRiskScore}%`;
     riskPillEl.textContent = safeRiskScore >= 80 ? "This is a scam!" : safeRiskScore >= 50 ? "Suspicious page" : "Low risk";
-    sourceLineEl.textContent = `Evidence source: ${formatEvidenceSources(evidenceSources)}`;
+    sourceLineEl.textContent = `Evaluated by: ${formatEvidenceSources(evidenceSources)}`;
 
     reasonsListEl.innerHTML = "";
     reasons.forEach(text => {
@@ -101,7 +100,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let continueCompleted = false;
 
-    function continueToOriginalUrl() {
+    async function continueToOriginalUrl() {
         if (continueCompleted) {
             return;
         }
@@ -121,7 +120,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 expiresAt: Date.now() + 60000,
                 riskScore: safeRiskScore,
                 confidence: Number(confidence) || 0.72,
-                decisionId: decisionId === "Not available" ? null : decisionId,
                 reason
             }
         }, () => {
@@ -156,7 +154,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 },
                 body: JSON.stringify({
                     url: originalUrl,
-                    decisionId: decisionId === "Not available" ? null : decisionId,
                     reporterEmail: reporterEmail || null,
                     reason: reportReason
                 })

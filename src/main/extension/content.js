@@ -21,10 +21,6 @@
             params.set("confidence", String(verdict.confidence));
         }
 
-        if (verdict.decisionId) {
-            params.set("decisionId", verdict.decisionId);
-        }
-
         if (Array.isArray(verdict.reasons) && verdict.reasons.length > 0) {
             params.set("reasons", JSON.stringify(verdict.reasons.slice(0, 5)));
         }

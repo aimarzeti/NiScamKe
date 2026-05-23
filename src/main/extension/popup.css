@@ -216,6 +216,18 @@ dd {
     line-height: 1.4;
 }
 
+.reason-box ul {
+    margin: 8px 0 0;
+    padding-left: 18px;
+    color: #39485d;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.reason-box li {
+    margin-top: 5px;
+}
+
 .privacy-note {
     position: relative;
     z-index: 1;
