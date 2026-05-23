@@ -11,7 +11,7 @@
 const MOCK_MODE = true; 
 
 // Upstream target route allocated for Person 1's Spring Boot REST framework configuration
-const LIVE_SCAMSHIELD_API_ROUTE = "http://localhost:8080/api/check-domain"; 
+const LIVE_SCAMSHIELD_API_ROUTE = "http://localhost:8080/api/v1/verify-link";
 
 chrome.runtime.onMessage.addListener((incomingMessage, sender, dispatchVerdictCallback) => {
     
