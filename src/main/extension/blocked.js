@@ -2,7 +2,7 @@ const API_BASE_URL = "http://localhost:8080";
 
 function decodeReasons(rawReasons, fallbackReason) {
     if (!rawReasons) {
-        return fallbackReason ? [fallbackReason] : ["Suspicious signals detected by the scan engine."];
+        return fallbackReason ? [fallbackReason] : ["Gemini AI flagged suspicious scam signals."];
     }
 
     try {
@@ -14,7 +14,7 @@ function decodeReasons(rawReasons, fallbackReason) {
         return [rawReasons];
     }
 
-    return fallbackReason ? [fallbackReason] : ["Suspicious signals detected by the scan engine."];
+    return fallbackReason ? [fallbackReason] : ["Gemini AI flagged suspicious scam signals."];
 }
 
 function formatPercent(value) {
@@ -38,9 +38,9 @@ async function readErrorMessage(response) {
 document.addEventListener("DOMContentLoaded", () => {
     const params = new URLSearchParams(window.location.search);
     const originalUrl = params.get("blocked") || "";
-    const reason = params.get("reason") || "Potential phishing behavior detected.";
+    const reason = params.get("reason") || "Gemini AI flagged suspicious scam signals.";
     const decisionId = params.get("decisionId") || "Not available";
-    const evidenceSources = params.get("sources") || "RULE_ENGINE";
+    const evidenceSources = params.get("sources") || "AI_MODEL";
     const riskScore = Number(params.get("riskScore"));
     const confidence = params.get("confidence");
     const reasons = decodeReasons(params.get("reasons"), reason);
@@ -49,24 +49,22 @@ document.addEventListener("DOMContentLoaded", () => {
     const decisionIdEl = document.getElementById("decisionId");
     const riskScoreEl = document.getElementById("riskScore");
     const confidenceEl = document.getElementById("confidence");
-    const summaryLineEl = document.getElementById("summaryLine");
     const reasonsListEl = document.getElementById("reasonsList");
     const riskFillEl = document.getElementById("riskFill");
     const riskPillEl = document.getElementById("riskPill");
     const sourceLineEl = document.getElementById("sourceLine");
+    const goBackButton = document.getElementById("goBackButton");
+    const continueButton = document.getElementById("continueButton");
+
+    const safeRiskScore = Number.isFinite(riskScore) ? Math.max(0, Math.min(100, riskScore)) : 85;
 
     blockedUrlEl.textContent = originalUrl || "Unknown URL";
     decisionIdEl.textContent = decisionId;
-    summaryLineEl.textContent = reason;
-
-    const safeRiskScore = Number.isFinite(riskScore) ? Math.max(0, Math.min(100, riskScore)) : 85;
     riskScoreEl.textContent = `${safeRiskScore}/100`;
     confidenceEl.textContent = formatPercent(confidence);
     riskFillEl.style.width = `${safeRiskScore}%`;
-    sourceLineEl.textContent = `Evidence source: ${evidenceSources}`;
-
-    const riskLabel = safeRiskScore >= 80 ? "High Risk" : safeRiskScore >= 50 ? "Medium Risk" : "Low Risk";
-    riskPillEl.textContent = riskLabel;
+    riskPillEl.textContent = safeRiskScore >= 80 ? "This is a scam!" : safeRiskScore >= 50 ? "Suspicious page" : "Low risk";
+    sourceLineEl.textContent = `Evidence source: ${formatEvidenceSources(evidenceSources)}`;
 
     reasonsListEl.innerHTML = "";
     reasons.forEach(text => {
@@ -74,9 +72,6 @@ document.addEventListener("DOMContentLoaded", () => {
         item.textContent = text;
         reasonsListEl.appendChild(item);
     });
-
-    const goBackButton = document.getElementById("goBackButton");
-    const continueButton = document.getElementById("continueButton");
 
     goBackButton.addEventListener("click", () => {
         if (history.length > 1) {

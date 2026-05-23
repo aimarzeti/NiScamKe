@@ -116,6 +116,12 @@ public class LinkVerificationController {
         return ResponseEntity.ok(new ReportResponse("RECEIVED", message));
     }
 
+    @PostMapping("/translate-ui")
+    public ResponseEntity<TranslationResponse> translateUi(@RequestBody TranslationRequest request) {
+        String translated = geminiIntegrationService.translateUiText(request.getText(), request.getTargetLanguage());
+        return ResponseEntity.ok(new TranslationResponse(translated));
+    }
+
     @GetMapping("/false-positive")
     public ResponseEntity<java.util.List<FalsePositiveResponse>> getFalsePositiveReports(
             @RequestParam(value = "status", required = false) String status) {
@@ -193,6 +199,7 @@ public class LinkVerificationController {
         private String url;
         private String pageText;
         private String clientTimestamp;
+        private String targetLanguage;
     }
 
     @Data
@@ -303,6 +310,21 @@ public class LinkVerificationController {
     public static class FalsePositiveReviewRequest {
         private String status; // APPROVED or REJECTED
         private String reviewNote;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class TranslationRequest {
+        private String text;
+        private String targetLanguage;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class TranslationResponse {
+        private String translatedText;
     }
 
     @Data

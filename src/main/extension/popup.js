@@ -1,11 +1,11 @@
 const STATE_COPY = {
     ALLOW: {
         title: "Looks safe",
-        subtitle: "Laman ini nampak selamat. Keep an eye out before entering sensitive details."
+        subtitle: "This site looks safe. Keep an eye out before entering sensitive details."
     },
     WARN: {
         title: "Use caution",
-        subtitle: "Ada tanda mencurigakan. Avoid entering passwords, OTPs, or payment details."
+        subtitle: "This site has suspicious elements. Avoid entering passwords, OTPs, or payment details."
     },
     USER_BYPASS: {
         title: "Bypassed warning",
@@ -13,17 +13,19 @@ const STATE_COPY = {
     },
     BLOCK: {
         title: "High-risk page",
-        subtitle: "Kami berhentikan laman ini kerana ia menyerupai cubaan scam atau phishing."
+        subtitle: "This page is considered high-risk because it exhibits characteristics associated with scams or phishing attempts. We have blocked it to protect you."
     },
     WAITING: {
-        title: "Protection is active",
-        subtitle: "Open any page and Ni Scam Ke? will check it automatically."
+        title: "Ready to scan",
+        subtitle: "Open a page or scan the current tab to see the latest protection signal."
     },
     SCANNING: {
-        title: "Refreshing now",
-        subtitle: "Checking this tab again with Ni Scam Ke? protection."
+        title: "Scanning now",
+        subtitle: "Checking the current page with Ni Scam Ke? protection."
     }
 };
+
+let renderSequence = 0;
 
 function formatPercent(value) {
     const numeric = Number(value);
@@ -36,14 +38,14 @@ function formatPercent(value) {
 
 function formatMode(scan) {
     if (!scan) {
-        return "Not scanned";
+        return UI_COPY.notScanned;
     }
 
     if (scan.backendAvailable === false) {
-        return "Local fallback";
+        return scan.scanMode === "LOCAL_RULES" ? "Local scam rules" : UI_COPY.localFallback;
     }
 
-    return scan.scanMode === "LIVE_BACKEND" ? "Live backend" : scan.scanMode || "Live backend";
+    return scan.scanMode === "LIVE_BACKEND" ? UI_COPY.liveBackend : scan.scanMode || UI_COPY.liveBackend;
 }
 
 function setCardState(status) {
@@ -60,23 +62,43 @@ function setCardState(status) {
 }
 
 function renderPopup(scan) {
+    const currentRender = ++renderSequence;
     const status = (scan?.status || "WAITING").toUpperCase();
     const displayStatus = scan?.scanMode === "USER_BYPASS" ? "USER_BYPASS" : status;
-    const copy = STATE_COPY[displayStatus] || STATE_COPY.WAITING;
+    const copy = UI_COPY.states[displayStatus] || UI_COPY.states.WAITING;
     const riskScore = Number.isFinite(Number(scan?.riskScore)) ? Number(scan.riskScore) : 0;
-    const reason = scan?.reason || "No scan result yet. Visit a page or refresh protection status for this tab.";
+    const reason = scan?.reason || "No scan result yet. Click scan to refresh the current page.";
 
     setCardState(displayStatus);
+
+    document.getElementById("riskScoreLabel").textContent = UI_COPY.riskScoreLabel;
+    document.getElementById("statusLabel").textContent = UI_COPY.statusLabel;
+    document.getElementById("confidenceTitle").textContent = UI_COPY.confidenceTitle;
+    document.getElementById("modeTitle").textContent = UI_COPY.modeTitle;
+    document.getElementById("domainTitle").textContent = UI_COPY.domainTitle;
+    document.getElementById("whyLabel").textContent = displayStatus === "ALLOW"
+        ? UI_COPY.safeReminderLabel
+        : UI_COPY.whyLabel;
+    document.getElementById("privacyNote").textContent = UI_COPY.privacyNote;
+
+    const scanButton = document.getElementById("scanButton");
+    if (!scanButton.disabled) {
+        scanButton.textContent = UI_COPY.scanButton;
+    }
 
     document.getElementById("statusTitle").textContent = copy.title;
     document.getElementById("statusSubtitle").textContent = copy.subtitle;
     document.getElementById("riskScore").textContent = scan ? `${Math.round(riskScore)}/100` : "--/100";
     document.getElementById("riskFill").style.width = scan ? `${Math.max(0, Math.min(100, riskScore))}%` : "0%";
-    document.getElementById("decisionLabel").textContent = scan ? displayStatus : "Waiting";
+    document.getElementById("decisionLabel").textContent = scan ? displayStatus : UI_COPY.waitingDecision;
     document.getElementById("confidenceLabel").textContent = formatPercent(scan?.confidence);
     document.getElementById("modeLabel").textContent = formatMode(scan);
-    document.getElementById("domainLabel").textContent = scan?.domain || "Current tab";
-    document.getElementById("reasonText").textContent = reason;
+    document.getElementById("domainLabel").textContent = scan?.domain || UI_COPY.currentTab;
+    document.getElementById("reasonText").textContent = displayStatus === "ALLOW"
+        ? UI_COPY.safeReminder
+        : displayStatus === "USER_BYPASS"
+            ? "You chose to continue anyway. This website might be a scam, so stay alert and avoid entering sensitive information."
+            : reason;
 }
 
 function refreshPopupState() {
@@ -98,17 +120,18 @@ function bindScanButton() {
 
     button.addEventListener("click", () => {
         const originalText = button.textContent;
-        button.textContent = "Refreshing this tab...";
+        button.textContent = "Scanning current tab...";
         button.disabled = true;
         renderPopup({
             status: "SCANNING",
             riskScore: 50,
             confidence: 0.5,
             domain: "Refreshing",
-            reason: "Asking the page scanner to refresh the current tab status.",
+            reason: "Refreshing the tab so the content scanner can evaluate the latest page.",
             scanMode: "SCANNING",
             backendAvailable: true
         });
+        button.textContent = UI_COPY.scanButtonLoading;
 
         chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
             if (tabs && tabs.length > 0 && tabs[0].id) {
@@ -122,6 +145,10 @@ function bindScanButton() {
                 });
                 return;
             }
+
+            [900, 1800, 3200].forEach(delay => {
+                setTimeout(refreshPopupState, delay);
+            });
 
             setTimeout(() => {
                 button.textContent = originalText;

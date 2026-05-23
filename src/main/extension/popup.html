@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ms">
+<html lang="en">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -18,12 +18,12 @@
             </div>
 
             <p class="subtitle" id="statusSubtitle">
-                Laman ini dinilai secara automatik. The latest risk signal appears here.
+                This page is being checked. We will show the latest risk signal here.
             </p>
 
             <div class="risk-panel" id="riskPanel">
                 <div>
-                    <span class="label">Risk score</span>
+                    <span class="label" id="riskScoreLabel">Risk score</span>
                     <strong id="riskScore">--/100</strong>
                 </div>
                 <div class="meter" aria-hidden="true">
@@ -33,29 +33,29 @@
 
             <dl class="details-grid">
                 <div>
-                    <dt>Status</dt>
+                    <dt id="statusLabel">Status</dt>
                     <dd id="decisionLabel">Waiting</dd>
                 </div>
                 <div>
-                    <dt>Confidence</dt>
+                    <dt id="confidenceTitle">Confidence</dt>
                     <dd id="confidenceLabel">--</dd>
                 </div>
                 <div>
-                    <dt>Mode</dt>
+                    <dt id="modeTitle">Mode</dt>
                     <dd id="modeLabel">Not scanned</dd>
                 </div>
                 <div>
-                    <dt>Domain</dt>
+                    <dt id="domainTitle">Domain</dt>
                     <dd id="domainLabel">Current tab</dd>
                 </div>
             </dl>
 
             <div class="reason-box">
-                <span class="label">Why</span>
+                <span class="label" id="whyLabel">Why blocked</span>
                 <p id="reasonText">Open a page or scan again to refresh protection status.</p>
             </div>
 
-            <p class="privacy-note">
+            <p class="privacy-note" id="privacyNote">
                 Privacy note: Ni Scam Ke? never asks for passwords, OTPs, or banking credentials.
             </p>
 

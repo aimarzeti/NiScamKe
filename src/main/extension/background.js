@@ -90,6 +90,18 @@ const APPLICATION_SCAM_BAIT_TERMS = [
     "hadiah"
 ];
 
+const SUSPICIOUS_APPLICATION_HOST_TERMS = [
+    "apy",
+    "ap1",
+    "app1y",
+    "aplly",
+    "aply",
+    "apply",
+    "mohon",
+    "daftar",
+    "claim"
+];
+
 const PERSONAL_CONTACT_TERMS = [
     "nama penuh",
     "nombor telegram",
@@ -134,6 +146,10 @@ function toNumber(value, fallbackValue) {
 
 function clampRiskScore(value) {
     return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function createLocalDecisionId() {
@@ -447,7 +463,7 @@ function getTemporaryBypass(scannedUrl) {
                 confidence: bypass.confidence || 0.72,
                 decisionId: bypass.decisionId,
                 reasons: [
-                    "You chose to continue anyway. This page is still considered risky.",
+                    "This website might be a scam. You chose to continue anyway, so be careful and avoid entering sensitive information.",
                     bypass.reason || "Temporary user bypass is active for this page."
                 ],
                 evidenceSources: "USER_BYPASS"
@@ -521,7 +537,11 @@ function evaluateWithLocalRules(incomingMessage) {
     const hasApplicationScamBait = APPLICATION_SCAM_BAIT_TERMS.some(term =>
         normalizedUrl.includes(term) || pageText.includes(term)
     );
+    const applicationBaitCount = APPLICATION_SCAM_BAIT_TERMS.filter(term =>
+        normalizedUrl.includes(term) || pageText.includes(term)
+    ).length;
     const collectsPersonalContact = PERSONAL_CONTACT_TERMS.some(term => pageText.includes(term));
+    const hasSuspiciousApplicationHost = SUSPICIOUS_APPLICATION_HOST_TERMS.some(term => host.includes(term));
 
     if (targetsBank && matchedPattern) {
         return normalizeVerdictPayload({
@@ -549,14 +569,40 @@ function evaluateWithLocalRules(incomingMessage) {
         }, targetUrl, { scanMode: "LOCAL_RULES", backendAvailable: false });
     }
 
+    if (applicationBaitCount >= 2 && hasSuspiciousApplicationHost) {
+        return normalizeVerdictPayload({
+            status: "BLOCK",
+            riskScore: 90,
+            confidence: 0.88,
+            reasons: [
+                "Why is this flagged: The untrusted domain combines public-aid or free-device bait with suspicious application wording or typo-like host text.",
+                "Modus operandi: The page appears to lure users into a fake application flow before collecting contact details, identity information, OTPs, or payment details."
+            ],
+            evidenceSources: "LOCAL_APPLICATION_SCAM_RULES"
+        }, targetUrl, { scanMode: "LOCAL_RULES", backendAvailable: false });
+    }
+
+    if (applicationBaitCount >= 3 && !establishedMalaysianTld) {
+        return normalizeVerdictPayload({
+            status: "BLOCK",
+            riskScore: 85,
+            confidence: 0.84,
+            reasons: [
+                "Why is this flagged: The URL uses multiple free-aid or free-device bait terms on an untrusted non-Malaysian domain.",
+                "Modus operandi: Scammers use this pattern to make a fake giveaway or assistance application look urgent and legitimate."
+            ],
+            evidenceSources: "LOCAL_APPLICATION_SCAM_RULES"
+        }, targetUrl, { scanMode: "LOCAL_RULES", backendAvailable: false });
+    }
+
     if (hasApplicationScamBait && collectsPersonalContact) {
         return normalizeVerdictPayload({
             status: "BLOCK",
             riskScore: 85,
             confidence: 0.84,
             reasons: [
-                "This page offers free aid or devices while collecting contact details on an untrusted domain.",
-                "Telegram-based application flows are a common scam pattern."
+                "Why is this flagged: This page offers free aid or devices while collecting contact details on an untrusted domain.",
+                "Modus operandi: Telegram or messaging-based application flows are often used to move victims away from safer official channels."
             ],
             evidenceSources: "LOCAL_APPLICATION_SCAM_RULES"
         }, targetUrl, { scanMode: "LOCAL_RULES", backendAvailable: false });
@@ -638,7 +684,8 @@ function evaluateViaBackend(incomingMessage) {
     const structuredBackendPayload = {
         url: incomingMessage.currentUrl,
         pageText: incomingMessage.pageText,
-        clientTimestamp: new Date().toISOString()
+        clientTimestamp: new Date().toISOString(),
+        targetLanguage: "en"
     };
 
     return fetch(LIVE_SCAN_ROUTE, {
@@ -658,51 +705,6 @@ function evaluateViaBackend(incomingMessage) {
         }));
 }
 
-function applyClientSideContext(verdict, incomingMessage) {
-    if (!verdict || !incomingMessage || !incomingMessage.credentialFieldDetected) {
-        return verdict;
-    }
-
-    const host = normalizeHost(incomingMessage.currentUrl);
-    if (matchesTrustedDomain(host) || verdict.status !== "ALLOW") {
-        return verdict;
-    }
-
-    const pageText = `${incomingMessage.pageText || ""} ${incomingMessage.credentialFieldLabel || ""}`.toLowerCase();
-    const sensitiveFinancialContext = [
-        "otp",
-        "tac",
-        "fpx",
-        "bank",
-        "maybank",
-        "cimb",
-        "bank islam",
-        "password",
-        "kata laluan",
-        "card",
-        "kad"
-    ].some(term => pageText.includes(term));
-
-    if (!sensitiveFinancialContext && verdict.riskScore < 20) {
-        return verdict;
-    }
-
-    const reasons = [
-        "Sensitive credential entry was detected on an untrusted page.",
-        ...verdict.reasons
-    ];
-
-    return {
-        ...verdict,
-        status: "WARN",
-        reason: reasons[0],
-        reasons,
-        riskScore: Math.max(verdict.riskScore, 58),
-        confidence: Math.max(verdict.confidence, 0.74),
-        evidenceSources: `${verdict.evidenceSources},CLIENT_CREDENTIAL_GUARD`
-    };
-}
-
 chrome.runtime.onMessage.addListener((incomingMessage, sender, dispatchVerdictCallback) => {
     if (incomingMessage.action !== "evaluateNetworkTarget") {
         return false;
@@ -714,21 +716,8 @@ chrome.runtime.onMessage.addListener((incomingMessage, sender, dispatchVerdictCa
         }
 
         return LIVE_BACKEND_ENABLED
-            ? evaluateViaBackend(incomingMessage).catch(error => {
-                console.warn("[Ni Scam Ke] Backend unavailable, using local fallback:", error);
-                const fallbackVerdict = evaluateWithLocalRules(incomingMessage);
-                return {
-                    ...fallbackVerdict,
-                    reasons: [
-                        "Live protection service is offline, so local safety checks were used.",
-                        ...fallbackVerdict.reasons
-                    ],
-                    reason: "Live protection service is offline, so local safety checks were used.",
-                    scanMode: "LOCAL_FALLBACK",
-                    backendAvailable: false
-                };
-            })
-            : evaluateWithLocalRules(incomingMessage);
+            ? evaluateViaBackendWithRetry(incomingMessage)
+            : Promise.reject(new Error("Live backend scanning is disabled."));
     });
 
     verdictPromise
@@ -741,15 +730,11 @@ chrome.runtime.onMessage.addListener((incomingMessage, sender, dispatchVerdictCa
         .catch(error => {
             console.error("[Ni Scam Ke] Scan pipeline error:", error);
 
-            const safeFallbackVerdict = normalizeVerdictPayload({
-                status: "WARN",
-                riskScore: 50,
-                confidence: 0.55,
-                reasons: ["Protection status is uncertain. Avoid entering passwords or OTPs here."],
-                evidenceSources: "FAILSAFE"
-            }, incomingMessage.currentUrl, { scanMode: "FAILSAFE", backendAvailable: false });
+            const safeFallbackVerdict = evaluateWithLocalRules(incomingMessage);
+            safeFallbackVerdict.backendAvailable = false;
+            safeFallbackVerdict.scanMode = "LOCAL_RULES";
 
-            persistLastScan(safeFallbackVerdict, sender);
+            persistLastScan(safeFallbackVerdict);
             dispatchVerdictCallback(safeFallbackVerdict);
         });
 
