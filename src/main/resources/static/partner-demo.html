@@ -123,25 +123,36 @@
       font-weight: 900;
     }
 
-    .quick-actions {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      margin-top: 10px;
-    }
-
-    .quick-actions button {
-      margin: 0;
-      background: #eef3ff;
-      color: var(--blue);
-    }
-
     .result {
       margin-top: 14px;
       border: 1px solid var(--line);
       border-radius: 14px;
       padding: 14px;
       background: #ffffff;
+    }
+
+    .message-card {
+      margin-top: 12px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+      background: #ffffff;
+    }
+
+    .message-card strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--ink);
+    }
+
+    .link-preview {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 12px;
+      background: #f2f6ff;
+      color: var(--blue);
+      font-weight: 900;
+      overflow-wrap: anywhere;
     }
 
     .decision {
@@ -208,10 +219,9 @@
   <main>
     <section class="layout">
       <div class="panel">
-        <h1>Partner API mobile demo</h1>
+        <h1>Mobile partner protection</h1>
         <p>
-          This simulates a bank, e-wallet, university, or telco app checking a link
-          before showing it to a phone user.
+          This simulates a partner app calling Ni Scam Ke? before opening an external link on a phone.
         </p>
 
         <label for="partnerId">Partner ID</label>
@@ -232,19 +242,20 @@
         <label for="pageText">Message or page context</label>
         <textarea id="pageText">Verify your Maybank account password and OTP immediately.</textarea>
 
-        <div class="quick-actions">
-          <button type="button" id="safeSample">Safe sample</button>
-          <button type="button" id="scamSample">Scam sample</button>
-        </div>
-
-        <button type="button" id="scanButton">Scan as partner app</button>
+        <button type="button" id="scanButton">Open external link</button>
       </div>
 
       <div class="phone">
-        <div class="phone-head">Partner App Link Check</div>
+        <div class="phone-head">DemoPay Wallet</div>
         <div class="phone-body">
-          <h2>Before opening link</h2>
-          <p id="statusText">Run a scan to see what a mobile app would show the user.</p>
+          <h2>Reward message</h2>
+          <p id="statusText">A customer taps an external link inside a mobile wallet.</p>
+
+          <div class="message-card">
+            <strong>Account verification required</strong>
+            <p>Verify your Maybank account password and OTP immediately to continue receiving rewards.</p>
+            <div class="link-preview" id="linkPreview">maybank-secure-login.test/verify-account?otp=required</div>
+          </div>
 
           <div class="result" id="resultBox" hidden>
             <span class="decision" id="decisionLabel">-</span>
@@ -267,17 +278,6 @@
   <script>
     const demoApiKey = "demo-partner-key";
 
-    function setSample(kind) {
-      if (kind === "safe") {
-        document.getElementById("url").value = "https://www.maybank2u.com.my/";
-        document.getElementById("pageText").value = "Official Maybank2u banking page opened from partner app.";
-        return;
-      }
-
-      document.getElementById("url").value = "https://maybank-secure-login.test/verify-account?otp=required";
-      document.getElementById("pageText").value = "Verify your Maybank account password and OTP immediately.";
-    }
-
     function renderResponse(data) {
       const resultBox = document.getElementById("resultBox");
       const decisionLabel = document.getElementById("decisionLabel");
@@ -293,13 +293,18 @@
       document.getElementById("rawJson").textContent = JSON.stringify(data, null, 2);
     }
 
+    function syncPhonePreview() {
+      const url = document.getElementById("url").value.trim();
+      document.getElementById("linkPreview").textContent = url.replace(/^https?:\/\//, "") || "-";
+    }
+
     async function scanPartnerLink() {
       const statusText = document.getElementById("statusText");
       const scanButton = document.getElementById("scanButton");
 
       scanButton.disabled = true;
-      scanButton.textContent = "Scanning...";
-      statusText.textContent = "Calling /api/v1/partner/scan-link with partner API key.";
+      scanButton.textContent = "Checking before opening...";
+      statusText.textContent = "DemoPay is checking this external link with Ni Scam Ke?.";
 
       try {
         const body = {
@@ -323,8 +328,10 @@
 
         const data = await response.json();
         renderResponse(data);
-        statusText.textContent = response.ok
-          ? "Partner app received a mobile-friendly safety decision."
+        statusText.textContent = response.ok && data.decision === "BLOCK"
+          ? "The app blocked the link before opening it."
+          : response.ok
+            ? "The app received a safety decision before opening the link."
           : "Partner API rejected the request.";
       } catch (error) {
         renderResponse({
@@ -338,13 +345,13 @@
         });
       } finally {
         scanButton.disabled = false;
-        scanButton.textContent = "Scan as partner app";
+        scanButton.textContent = "Open external link";
       }
     }
 
-    document.getElementById("safeSample").addEventListener("click", () => setSample("safe"));
-    document.getElementById("scamSample").addEventListener("click", () => setSample("scam"));
+    document.getElementById("url").addEventListener("input", syncPhonePreview);
     document.getElementById("scanButton").addEventListener("click", scanPartnerLink);
+    syncPhonePreview();
   </script>
 </body>
 </html>
