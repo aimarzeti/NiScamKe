@@ -36,8 +36,8 @@ public class VerificationService {
     private final FalsePositiveReportRepository falsePositiveReportRepository;
     private final GeminiIntegrationService geminiIntegrationService;
 
-    @Cacheable(value = "domainVerifications", key = "#request.currentUrl")
-public VerificationResponse checkLink(VerificationRequest request) {
+    @Cacheable(value = "domainVerifications", key = "#request.currentUrl + ':' + #request.pageText")
+    public VerificationResponse checkLink(VerificationRequest request) {
         String domain = extractDomainName(request.getCurrentUrl());
         if (domain.isBlank()) {
             return new VerificationResponse("ALLOW", "Unable to verify malformed URL");
@@ -55,7 +55,7 @@ public VerificationResponse checkLink(VerificationRequest request) {
         boolean isScam = geminiIntegrationService.analyzeWithGemini(domain, pageText);
 
         if (isScam) {
-            // ✅ Only auto-save if BOTH fast-path AND AI agree it's a scam
+            // Only auto-save when the structural checks and AI decision agree.
             if (structuralRisk >= 40) {
                 saveToRegistry(domain);
             }
@@ -201,10 +201,12 @@ public VerificationResponse checkLink(VerificationRequest request) {
         long allowCount = decisionLogRepository.countByDecision("ALLOW");
         long warnCount = decisionLogRepository.countByDecision("WARN");
         long blockCount = decisionLogRepository.countByDecision("BLOCK");
+        long totalScans = allowCount + warnCount + blockCount;
         long pendingFalsePositives = falsePositiveReportRepository.countByStatus("PENDING_REVIEW");
         long approvedFalsePositives = falsePositiveReportRepository.countByStatus("APPROVED");
         long rejectedFalsePositives = falsePositiveReportRepository.countByStatus("REJECTED");
         return new SummaryResponse(
+                totalScans,
                 allowCount,
                 warnCount,
                 blockCount,
@@ -214,12 +216,17 @@ public VerificationResponse checkLink(VerificationRequest request) {
     }
 
     public record SummaryResponse(
+            long totalScans,
             long allowCount,
             long warnCount,
             long blockCount,
             long pendingFalsePositives,
             long approvedFalsePositives,
             long rejectedFalsePositives) {
+    }
+
+    public List<DecisionLog> getRecentDecisions() {
+        return decisionLogRepository.findTop10ByOrderByCreatedAtDesc();
     }
 
     private void saveToRegistry(String domain) {

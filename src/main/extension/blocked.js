@@ -1,3 +1,5 @@
+const API_BASE_URL = "http://localhost:8080";
+
 function decodeReasons(rawReasons, fallbackReason) {
     if (!rawReasons) {
         return fallbackReason ? [fallbackReason] : ["Suspicious signals detected by the scan engine."];
@@ -75,25 +77,72 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    continueButton.addEventListener("click", () => {
-        let remaining = 3;
-        continueButton.disabled = true;
-        continueButton.textContent = `Continuing in ${remaining}s...`;
+    let continueTimer = null;
+    let remaining = 3;
+    let continueCompleted = false;
 
-        const timer = setInterval(() => {
+    function resetContinueButton() {
+        if (continueCompleted) {
+            return;
+        }
+
+        clearInterval(continueTimer);
+        continueTimer = null;
+        remaining = 3;
+        continueButton.disabled = false;
+        continueButton.textContent = "Continue anyway (3s hold)";
+    }
+
+    function startContinueHold() {
+        if (continueTimer) {
+            return;
+        }
+
+        continueButton.textContent = `Keep holding ${remaining}s...`;
+
+        continueTimer = setInterval(() => {
             remaining -= 1;
             if (remaining <= 0) {
-                clearInterval(timer);
-                if (originalUrl) {
-                    window.location.href = originalUrl;
-                } else {
-                    history.back();
-                }
+                clearInterval(continueTimer);
+                continueCompleted = true;
+                continueButton.textContent = "Opening with temporary bypass...";
+                continueButton.disabled = true;
+                continueToOriginalUrl();
                 return;
             }
 
-            continueButton.textContent = `Continuing in ${remaining}s...`;
+            continueButton.textContent = `Keep holding ${remaining}s...`;
         }, 1000);
+    }
+
+    function continueToOriginalUrl() {
+        if (!originalUrl) {
+            history.back();
+            return;
+        }
+
+        chrome.storage.local.set({
+            temporaryBypass: {
+                url: originalUrl,
+                expiresAt: Date.now() + 60000
+            }
+        }, () => {
+            window.location.href = originalUrl;
+        });
+    }
+
+    continueButton.addEventListener("pointerdown", startContinueHold);
+    continueButton.addEventListener("pointerup", resetContinueButton);
+    continueButton.addEventListener("pointerleave", resetContinueButton);
+    continueButton.addEventListener("keydown", event => {
+        if (event.key === "Enter" || event.key === " ") {
+            startContinueHold();
+        }
+    });
+    continueButton.addEventListener("keyup", resetContinueButton);
+
+    continueButton.addEventListener("click", event => {
+        event.preventDefault();
     });
 
     const falsePositiveForm = document.getElementById("falsePositiveForm");
@@ -111,7 +160,7 @@ document.addEventListener("DOMContentLoaded", () => {
         reportStatus.textContent = "";
 
         try {
-            const response = await fetch("http://localhost:8080/api/v1/false-positive", {
+            const response = await fetch(`${API_BASE_URL}/api/v1/false-positive`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"

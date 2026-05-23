@@ -35,9 +35,19 @@ public class GeminiIntegrationService {
         "publicbank", "ambank", "affin", "bsn", "agro"
     );
 
+    private static final List<String> SUSPICIOUS_DOMAIN_TOKENS = List.of(
+        "secure", "login", "verify", "update", "support", "account", "otp", "claim"
+    );
+
+    private static final List<String> HIGH_RISK_TLDS = List.of(
+        ".click", ".online", ".site", ".top", ".xyz", ".icu", ".test"
+    );
+
     private static final Set<String> TRUSTED_DOMAINS = Set.of(
         "bankislam.com.my", "cimbclicks.com.my", "maybank2u.com.my",
-        "rhbbank.com.my", "pbebank.com", "beubankislam.com.my"
+        "rhbbank.com.my", "pbebank.com", "beubankislam.com.my",
+        "maybank.com", "cimb.com.my", "publicbank.com.my",
+        "hongleongbank.com.my", "mybsn.com.my"
     );
 
     @Value("${gemini.api.key}")
@@ -49,7 +59,7 @@ public class GeminiIntegrationService {
     public boolean analyzeWithGemini(String domain, String pageText) {
         String normalizedDomain = domain == null ? "" : domain.toLowerCase(Locale.ROOT);
 
-        int structuralRisk = calculateStructuralRisk(normalizedDomain);
+        int structuralRisk = calculateStructuralRisk(normalizedDomain, pageText);
         if (structuralRisk >= 40) {
             System.out.println("[ScamShield Fast-Path] Structural bank mimic detected. Hard-blocking threat.");
             return true;
@@ -200,19 +210,64 @@ public class GeminiIntegrationService {
 
     public int assessStructuralRisk(String domain, String pageText) {
         String normalizedDomain = domain == null ? "" : domain.toLowerCase(Locale.ROOT);
-        return calculateStructuralRisk(normalizedDomain);
+        return calculateStructuralRisk(normalizedDomain, pageText);
     }
 
-    private int calculateStructuralRisk(String normalizedDomain) {
+    private int calculateStructuralRisk(String normalizedDomain, String pageText) {
+        if (normalizedDomain.isBlank()) {
+            return 50;
+        }
+
+        if (isTrustedDomain(normalizedDomain)) {
+            return 0;
+        }
+
         boolean targetsMalaysianBank = BANK_KEYWORDS.stream()
                 .anyMatch(normalizedDomain::contains);
 
-        boolean trustedMalaysianDomain = TRUSTED_DOMAINS.contains(normalizedDomain)
-                || normalizedDomain.endsWith(".gov.my")
-                || normalizedDomain.endsWith(".edu.my")
-                || normalizedDomain.endsWith(".com.my");
+        boolean hasSuspiciousToken = SUSPICIOUS_DOMAIN_TOKENS.stream()
+                .anyMatch(normalizedDomain::contains);
 
-        return (targetsMalaysianBank && !trustedMalaysianDomain) ? 100 : 0;
+        boolean highRiskTld = HIGH_RISK_TLDS.stream()
+                .anyMatch(normalizedDomain::endsWith);
+
+        String normalizedPageText = pageText == null ? "" : pageText.toLowerCase(Locale.ROOT);
+        boolean asksForSensitiveInfo = normalizedPageText.contains("otp")
+                || normalizedPageText.contains("password")
+                || normalizedPageText.contains("login")
+                || normalizedPageText.contains("verify your account")
+                || normalizedPageText.contains("akaun")
+                || normalizedPageText.contains("kata laluan");
+
+        if (targetsMalaysianBank && hasSuspiciousToken) {
+            return 100;
+        }
+
+        if (targetsMalaysianBank) {
+            return 90;
+        }
+
+        if (hasSuspiciousToken && highRiskTld) {
+            return 85;
+        }
+
+        if (hasSuspiciousToken && asksForSensitiveInfo) {
+            return 70;
+        }
+
+        if (highRiskTld && asksForSensitiveInfo) {
+            return 60;
+        }
+
+        return 10;
+    }
+
+    private boolean isTrustedDomain(String normalizedDomain) {
+        return TRUSTED_DOMAINS.stream()
+                .anyMatch(trustedDomain -> normalizedDomain.equals(trustedDomain)
+                        || normalizedDomain.endsWith("." + trustedDomain))
+                || normalizedDomain.endsWith(".gov.my")
+                || normalizedDomain.endsWith(".edu.my");
     }
 
     public void connectToGemini() {

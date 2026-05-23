@@ -7,36 +7,62 @@
     <link rel="stylesheet" href="popup.css" />
 </head>
 <body>
-    <div id="safe-popup" class="popup safe">
-        <div class="shield">&#128737;&#65039;</div>
-        <h1>Ni Scam Ke?</h1>
+    <main class="popup-shell" aria-live="polite">
+        <section class="hero-card">
+            <div class="brand-row">
+                <div class="brand-mark" aria-hidden="true">NSK</div>
+                <div>
+                    <p class="eyebrow">Ni Scam Ke?</p>
+                    <h1 id="statusTitle">Checking protection</h1>
+                </div>
+            </div>
 
-        <p class="status">This site is not a scam!</p>
+            <p class="subtitle" id="statusSubtitle">
+                Laman ini sedang dinilai. We will show the latest risk signal here.
+            </p>
 
-        <div class="info-box">
-            <p><strong>Status:</strong> Safe page</p>
-            <p><strong>Overall Risk Level:</strong> Low</p>
-        </div>
+            <div class="risk-panel" id="riskPanel">
+                <div>
+                    <span class="label">Risk score</span>
+                    <strong id="riskScore">--/100</strong>
+                </div>
+                <div class="meter" aria-hidden="true">
+                    <span id="riskFill"></span>
+                </div>
+            </div>
 
-        <button id="safe-scan-btn">Scan Again</button>
-    </div>
+            <dl class="details-grid">
+                <div>
+                    <dt>Status</dt>
+                    <dd id="decisionLabel">Waiting</dd>
+                </div>
+                <div>
+                    <dt>Confidence</dt>
+                    <dd id="confidenceLabel">--</dd>
+                </div>
+                <div>
+                    <dt>Mode</dt>
+                    <dd id="modeLabel">Not scanned</dd>
+                </div>
+                <div>
+                    <dt>Domain</dt>
+                    <dd id="domainLabel">Current tab</dd>
+                </div>
+            </dl>
 
-    <div id="danger-popup" class="popup danger">
-        <div class="shield">&#9888;&#65039;</div>
+            <div class="reason-box">
+                <span class="label">Why</span>
+                <p id="reasonText">Open a page or scan again to refresh protection status.</p>
+            </div>
 
-        <h1>Ni Scam Ke?</h1>
+            <p class="privacy-note">
+                Privacy note: Ni Scam Ke? never asks for passwords, OTPs, or banking credentials.
+            </p>
 
-        <p class="status">This site is suspicious!</p>
-
-        <div class="info-box">
-            <p><strong>Status:</strong> Dangerous page!</p>
-            <p><strong>Overall Risk Level:</strong> High</p>
-        </div>
-
-        <button id="danger-scan-btn">Scan Again</button>
-    </div>
+            <button id="scanButton" type="button">Scan Current Page</button>
+        </section>
+    </main>
 
     <script src="popup.js"></script>
 </body>
 </html>
-

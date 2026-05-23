@@ -13,7 +13,7 @@
 
 body {
     margin: 0;
-    font-family: "Segoe UI", "Poppins", sans-serif;
+    font-family: "Trebuchet MS", "Aptos", sans-serif;
     color: var(--ink);
     background:
         radial-gradient(circle at 15% 0%, #ffe4e2 0%, rgba(255, 228, 226, 0) 42%),
@@ -134,6 +134,17 @@ h1 {
     margin: 12px 0 0;
     font-size: 13px;
     color: #7b8799;
+}
+
+.privacy-note {
+    margin: 16px 0 0;
+    padding: 12px 14px;
+    border: 1px solid #f0d494;
+    border-radius: 12px;
+    background: #fff8e8;
+    color: #68480d;
+    font-weight: 700;
+    line-height: 1.45;
 }
 
 .actions {

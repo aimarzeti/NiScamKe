@@ -117,6 +117,14 @@ public class LinkVerificationController {
         return ResponseEntity.ok(verificationService.getSummary());
     }
 
+    @GetMapping("/admin/recent-decisions")
+    public ResponseEntity<java.util.List<DecisionResponse>> getRecentDecisions() {
+        java.util.List<DecisionResponse> responses = verificationService.getRecentDecisions().stream()
+                .map(this::mapDecisionResponse)
+                .toList();
+        return ResponseEntity.ok(responses);
+    }
+
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
