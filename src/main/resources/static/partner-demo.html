@@ -131,6 +131,21 @@
       background: #ffffff;
     }
 
+    .result.blocked {
+      border-color: #f0b8b2;
+      background: #fff0ee;
+    }
+
+    .result.allowed {
+      border-color: #b8e2cf;
+      background: #edf9f4;
+    }
+
+    .result.warned {
+      border-color: #f3cf91;
+      background: #fff7e8;
+    }
+
     .message-card {
       margin-top: 12px;
       border: 1px solid var(--line);
@@ -168,6 +183,22 @@
     .decision.BLOCK { background: var(--danger); }
     .decision.UNAUTHORIZED { background: #637186; }
 
+    .safety-title {
+      margin: 10px 0 4px;
+      font-size: 22px;
+      line-height: 1.1;
+      color: var(--ink);
+    }
+
+    .safe-button {
+      background: var(--safe);
+    }
+
+    .muted-button {
+      background: #eef3ff;
+      color: var(--blue);
+    }
+
     .meta {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -195,6 +226,16 @@
       display: block;
       margin-top: 4px;
       overflow-wrap: anywhere;
+    }
+
+    details {
+      margin-top: 12px;
+    }
+
+    summary {
+      cursor: pointer;
+      color: var(--blue);
+      font-weight: 900;
     }
 
     pre {
@@ -259,16 +300,25 @@
 
           <div class="result" id="resultBox" hidden>
             <span class="decision" id="decisionLabel">-</span>
+            <h2 class="safety-title" id="safetyTitle">Safety decision</h2>
             <p id="userMessage"></p>
 
             <div class="meta">
-              <div><span>Action</span><strong id="actionValue">-</strong></div>
               <div><span>Risk</span><strong id="riskValue">-</strong></div>
-              <div><span>Partner</span><strong id="partnerValue">-</strong></div>
               <div><span>Threat</span><strong id="threatValue">-</strong></div>
             </div>
 
-            <pre id="rawJson"></pre>
+            <button type="button" class="safe-button" id="primaryAction">Back to safety</button>
+            <button type="button" class="muted-button" id="secondaryAction">Report if this looks wrong</button>
+
+            <details>
+              <summary>Technical proof</summary>
+              <div class="meta">
+                <div><span>API Action</span><strong id="actionValue">-</strong></div>
+                <div><span>Partner</span><strong id="partnerValue">-</strong></div>
+              </div>
+              <pre id="rawJson"></pre>
+            </details>
           </div>
         </div>
       </div>
@@ -281,16 +331,49 @@
     function renderResponse(data) {
       const resultBox = document.getElementById("resultBox");
       const decisionLabel = document.getElementById("decisionLabel");
+      const decision = data.decision || "WARN";
 
       resultBox.hidden = false;
-      decisionLabel.className = `decision ${data.decision || ""}`;
-      decisionLabel.textContent = data.decision || "-";
-      document.getElementById("userMessage").textContent = data.userMessage || "-";
+      resultBox.classList.remove("blocked", "allowed", "warned");
+      resultBox.classList.add(decision === "BLOCK" ? "blocked" : decision === "ALLOW" ? "allowed" : "warned");
+
+      decisionLabel.className = `decision ${decision}`;
+      decisionLabel.textContent = decision;
+      document.getElementById("safetyTitle").textContent = safetyTitle(decision);
+      document.getElementById("userMessage").textContent = humanUserMessage(data);
       document.getElementById("actionValue").textContent = data.recommendedAction || "-";
       document.getElementById("riskValue").textContent = data.riskScore == null ? "-" : `${data.riskScore}/100`;
       document.getElementById("partnerValue").textContent = data.partnerId || "-";
       document.getElementById("threatValue").textContent = data.threatType || "-";
       document.getElementById("rawJson").textContent = JSON.stringify(data, null, 2);
+    }
+
+    function safetyTitle(decision) {
+      if (decision === "BLOCK") {
+        return "This link was blocked";
+      }
+
+      if (decision === "ALLOW") {
+        return "This link looks safe";
+      }
+
+      return "Check before opening";
+    }
+
+    function humanUserMessage(data) {
+      if (data.decision === "BLOCK") {
+        return "DemoPay stopped this external link because it looks like a banking phishing attempt. Do not enter your password, OTP, TAC, card details, or banking login.";
+      }
+
+      if (data.decision === "ALLOW") {
+        return "Ni Scam Ke? did not find major scam indicators. Stay careful before entering sensitive details.";
+      }
+
+      if (data.decision === "UNAUTHORIZED") {
+        return "The partner app could not verify its API key.";
+      }
+
+      return "DemoPay found warning signs. Review the link carefully before opening it.";
     }
 
     function syncPhonePreview() {
