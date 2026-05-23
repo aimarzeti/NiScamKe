@@ -45,16 +45,16 @@ button {
     cursor: pointer;
 }
 
-.safe.status {
+.safe .status {
     color: #16a34a;
 }
 
-.danger.status {
+.danger .status {
     color: #dc2626;
     animation: flash 1s infinite;
 }
 
-.danger.info-box {
+.danger  .info-box {
     border: 2px solid #dc2626;
     background: #fee2e2;
 }
