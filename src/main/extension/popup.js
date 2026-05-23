@@ -7,6 +7,10 @@ const STATE_COPY = {
         title: "Use caution",
         subtitle: "Ada tanda mencurigakan. Avoid entering passwords, OTPs, or payment details."
     },
+    USER_BYPASS: {
+        title: "Bypassed warning",
+        subtitle: "You continued at your own risk. This page is still considered suspicious."
+    },
     BLOCK: {
         title: "High-risk page",
         subtitle: "Kami berhentikan laman ini kerana ia menyerupai cubaan scam atau phishing."
@@ -48,7 +52,7 @@ function setCardState(status) {
 
     if (status === "ALLOW") {
         card.classList.add("state-allow");
-    } else if (status === "WARN") {
+    } else if (status === "WARN" || status === "USER_BYPASS") {
         card.classList.add("state-warn");
     } else if (status === "BLOCK") {
         card.classList.add("state-block");
@@ -57,17 +61,18 @@ function setCardState(status) {
 
 function renderPopup(scan) {
     const status = (scan?.status || "WAITING").toUpperCase();
-    const copy = STATE_COPY[status] || STATE_COPY.WAITING;
+    const displayStatus = scan?.scanMode === "USER_BYPASS" ? "USER_BYPASS" : status;
+    const copy = STATE_COPY[displayStatus] || STATE_COPY.WAITING;
     const riskScore = Number.isFinite(Number(scan?.riskScore)) ? Number(scan.riskScore) : 0;
     const reason = scan?.reason || "No scan result yet. Click scan to refresh the current page.";
 
-    setCardState(status);
+    setCardState(displayStatus);
 
     document.getElementById("statusTitle").textContent = copy.title;
     document.getElementById("statusSubtitle").textContent = copy.subtitle;
     document.getElementById("riskScore").textContent = scan ? `${Math.round(riskScore)}/100` : "--/100";
     document.getElementById("riskFill").style.width = scan ? `${Math.max(0, Math.min(100, riskScore))}%` : "0%";
-    document.getElementById("decisionLabel").textContent = scan ? status : "Waiting";
+    document.getElementById("decisionLabel").textContent = scan ? displayStatus : "Waiting";
     document.getElementById("confidenceLabel").textContent = formatPercent(scan?.confidence);
     document.getElementById("modeLabel").textContent = formatMode(scan);
     document.getElementById("domainLabel").textContent = scan?.domain || "Current tab";

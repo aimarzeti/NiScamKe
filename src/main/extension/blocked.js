@@ -77,45 +77,17 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    let continueTimer = null;
-    let remaining = 3;
     let continueCompleted = false;
 
-    function resetContinueButton() {
+    function continueToOriginalUrl() {
         if (continueCompleted) {
             return;
         }
 
-        clearInterval(continueTimer);
-        continueTimer = null;
-        remaining = 3;
-        continueButton.disabled = false;
-        continueButton.textContent = "Continue anyway (3s hold)";
-    }
+        continueCompleted = true;
+        continueButton.textContent = "Opening at your own risk...";
+        continueButton.disabled = true;
 
-    function startContinueHold() {
-        if (continueTimer) {
-            return;
-        }
-
-        continueButton.textContent = `Keep holding ${remaining}s...`;
-
-        continueTimer = setInterval(() => {
-            remaining -= 1;
-            if (remaining <= 0) {
-                clearInterval(continueTimer);
-                continueCompleted = true;
-                continueButton.textContent = "Opening with temporary bypass...";
-                continueButton.disabled = true;
-                continueToOriginalUrl();
-                return;
-            }
-
-            continueButton.textContent = `Keep holding ${remaining}s...`;
-        }, 1000);
-    }
-
-    function continueToOriginalUrl() {
         if (!originalUrl) {
             history.back();
             return;
@@ -124,25 +96,20 @@ document.addEventListener("DOMContentLoaded", () => {
         chrome.storage.local.set({
             temporaryBypass: {
                 url: originalUrl,
-                expiresAt: Date.now() + 60000
+                expiresAt: Date.now() + 60000,
+                riskScore: safeRiskScore,
+                confidence: Number(confidence) || 0.72,
+                decisionId: decisionId === "Not available" ? null : decisionId,
+                reason
             }
         }, () => {
             window.location.href = originalUrl;
         });
     }
 
-    continueButton.addEventListener("pointerdown", startContinueHold);
-    continueButton.addEventListener("pointerup", resetContinueButton);
-    continueButton.addEventListener("pointerleave", resetContinueButton);
-    continueButton.addEventListener("keydown", event => {
-        if (event.key === "Enter" || event.key === " ") {
-            startContinueHold();
-        }
-    });
-    continueButton.addEventListener("keyup", resetContinueButton);
-
     continueButton.addEventListener("click", event => {
         event.preventDefault();
+        continueToOriginalUrl();
     });
 
     const falsePositiveForm = document.getElementById("falsePositiveForm");

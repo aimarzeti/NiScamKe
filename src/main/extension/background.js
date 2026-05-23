@@ -128,6 +128,14 @@ function clampRiskScore(value) {
     return Math.max(0, Math.min(100, Math.round(value)));
 }
 
+function createLocalDecisionId() {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+        return `local-${crypto.randomUUID()}`;
+    }
+
+    return `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
 function normalizeHost(rawUrl) {
     try {
         const parsed = new URL(rawUrl);
@@ -212,7 +220,7 @@ function normalizeVerdictPayload(rawVerdict, scannedUrl, options = {}) {
         reasons,
         riskScore,
         confidence: toNumber(rawVerdict.confidence, status === "BLOCK" ? 0.95 : status === "WARN" ? 0.76 : 0.92),
-        decisionId: rawVerdict.decisionId || "",
+        decisionId: rawVerdict.decisionId || createLocalDecisionId(),
         evidenceSources: rawVerdict.evidenceSources || options.evidenceSources || "RULE_ENGINE",
         scanMode: options.scanMode || rawVerdict.scanMode || "LIVE_BACKEND",
         backendAvailable: options.backendAvailable !== false,
@@ -242,10 +250,14 @@ function getTemporaryBypass(scannedUrl) {
             }
 
             resolve(normalizeVerdictPayload({
-                status: "ALLOW",
-                riskScore: 35,
-                confidence: 0.62,
-                reasons: ["Temporary user bypass is active for this page."],
+                status: "WARN",
+                riskScore: bypass.riskScore || 85,
+                confidence: bypass.confidence || 0.72,
+                decisionId: bypass.decisionId,
+                reasons: [
+                    "You chose to continue anyway. This page is still considered risky.",
+                    bypass.reason || "Temporary user bypass is active for this page."
+                ],
                 evidenceSources: "USER_BYPASS"
             }, scannedUrl, { scanMode: "USER_BYPASS", backendAvailable: true }));
         });
