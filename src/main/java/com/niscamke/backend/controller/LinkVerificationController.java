@@ -6,6 +6,7 @@ package com.niscamke.backend.controller;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -52,18 +53,23 @@ public class LinkVerificationController {
     }
 
     @PostMapping("/report-scam")
-public ResponseEntity<String> reportScam(@RequestBody ReportRequest request) {
-    verificationService.submitCommunityReport(request);
-    return ResponseEntity.ok("Report submitted. Thank you for keeping Malaysia safe!");
-}
+    public ResponseEntity<String> reportScam(@RequestBody ReportRequest request) {
+        verificationService.submitCommunityReport(request);
+        return ResponseEntity.ok("Report submitted. Thank you for keeping Malaysia safe!");
+    }
 
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public static class ReportRequest {
-    private String url;
-    private String reporterEmail; // optional
-    private String scamType;      // "PHISHING", "INVESTMENT_SCAM", "PARCEL_SCAM"
-    private String description;
-}
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ReportRequest {
+        private String url;
+        private String reporterEmail; // optional
+        private String scamType;      // "PHISHING", "INVESTMENT_SCAM", "PARCEL_SCAM"
+        private String description;
+    }
+
+    @GetMapping("/health")
+    public ResponseEntity<String> health() {
+        return ResponseEntity.ok("NiScamKe Backend v1.0 — Protecting Malaysians 🛡️");
+    }
 }
