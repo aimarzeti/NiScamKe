@@ -13,7 +13,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
+
+import java.io.IOException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -111,7 +114,7 @@ public class GeminiIntegrationService {
                 System.err.println("[ScamShield] Unexpected HTTP status: " + externalServiceApiResponse.getStatusCode());
             }
 
-        } catch (Exception e) {
+        } catch (RestClientException e) {
             System.err.println("[ScamShield System Fault] Gemini API Connection Error: " + e.getMessage());
         }
 
@@ -188,7 +191,7 @@ public class GeminiIntegrationService {
 
             return "SCAM".equals(rawOutput);
 
-        } catch (Exception e) {
+        } catch (IOException e) {
             System.err.println("[ScamShield Parser] Error parsing Gemini response: " + e.getMessage());
             return false;
         }
