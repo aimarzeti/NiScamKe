@@ -16,8 +16,10 @@ import com.niscamke.backend.controller.LinkVerificationController.VerificationRe
 import com.niscamke.backend.controller.LinkVerificationController.VerificationResponse;
 import com.niscamke.backend.model.DecisionLog;
 import com.niscamke.backend.model.ScamRegistry;
+import com.niscamke.backend.model.UserReport;
 import com.niscamke.backend.repository.DecisionLogRepository;
 import com.niscamke.backend.repository.ScamRegistryRepository;
+import com.niscamke.backend.repository.UserReportRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -27,6 +29,7 @@ public class VerificationService {
 
     private final ScamRegistryRepository scamRegistryRepository;
     private final DecisionLogRepository decisionLogRepository;
+    private final UserReportRepository userReportRepository;
     private final GeminiIntegrationService geminiIntegrationService;
 
     @Cacheable(value = "domainVerifications", key = "#request.currentUrl")
@@ -142,6 +145,15 @@ public VerificationResponse checkLink(VerificationRequest request) {
         }
 
         LocalDateTime now = LocalDateTime.now();
+        userReportRepository.save(UserReport.builder()
+                .url(request.getUrl())
+                .domainName(domain)
+                .reporterEmail(request.getReporterEmail())
+                .scamType(request.getScamType() != null ? request.getScamType() : "COMMUNITY_REPORTED")
+                .description(request.getDescription())
+                .status("PENDING_REVIEW")
+                .build());
+
         scamRegistryRepository.findByDomainName(domain)
                 .map(existing -> {
                     existing.setScamType(request.getScamType() != null ? request.getScamType() : "COMMUNITY_REPORTED");
