@@ -1,6 +1,8 @@
+const API_BASE_URL = "http://localhost:8080";
+
 function decodeReasons(rawReasons, fallbackReason) {
     if (!rawReasons) {
-        return fallbackReason ? [fallbackReason] : ["Suspicious signals detected by the scan engine."];
+        return fallbackReason ? [fallbackReason] : ["Gemini AI flagged suspicious scam signals."];
     }
 
     try {
@@ -12,7 +14,7 @@ function decodeReasons(rawReasons, fallbackReason) {
         return [rawReasons];
     }
 
-    return fallbackReason ? [fallbackReason] : ["Suspicious signals detected by the scan engine."];
+    return fallbackReason ? [fallbackReason] : ["Gemini AI flagged suspicious scam signals."];
 }
 
 function formatPercent(value) {
@@ -24,38 +26,62 @@ function formatPercent(value) {
     return `${Math.round(numeric * 100)}%`;
 }
 
+function formatEvidenceSources(evidenceSources) {
+    const sourceLabels = {
+        AI_MODEL: "Gemini AI",
+        RULE_ENGINE: "rule engine",
+        COMMUNITY_DB: "community database",
+        INPUT_VALIDATION: "input validation",
+        USER_BYPASS: "user bypass",
+        FAILSAFE: "failsafe",
+        LOCAL_APPLICATION_SCAM_RULES: "local application scam rules",
+        LOCAL_BANK_MIMIC_RULES: "local banking mimic rules",
+        LOCAL_COPY_ANALYSIS: "local typo and copy analysis",
+        LOCAL_INPUT_VALIDATION: "local input validation",
+        LOCAL_REVIEW_REQUIRED: "local review rules",
+        LOCAL_RISK_RULES: "local risk rules",
+        LOCAL_RULE_ENGINE: "local rule engine",
+        LOCAL_TRUST_LIST: "local trusted list",
+        LOCAL_TYPOSQUATTING_RULES: "local typosquatting rules",
+        BACKEND_FAILSAFE: "backend failsafe",
+        TRUSTED_ALLOWLIST: "trusted allowlist"
+    };
+
+    return String(evidenceSources || "AI_MODEL")
+        .split(",")
+        .map(source => source.trim())
+        .filter(Boolean)
+        .map(source => sourceLabels[source] || source)
+        .join(", ");
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     const params = new URLSearchParams(window.location.search);
     const originalUrl = params.get("blocked") || "";
-    const reason = params.get("reason") || "Potential phishing behavior detected.";
-    const decisionId = params.get("decisionId") || "Not available";
-    const evidenceSources = params.get("sources") || "RULE_ENGINE";
+    const reason = params.get("reason") || "Gemini AI flagged suspicious scam signals.";
+    const evidenceSources = params.get("sources") || "AI_MODEL";
     const riskScore = Number(params.get("riskScore"));
     const confidence = params.get("confidence");
     const reasons = decodeReasons(params.get("reasons"), reason);
 
     const blockedUrlEl = document.getElementById("blockedUrl");
-    const decisionIdEl = document.getElementById("decisionId");
     const riskScoreEl = document.getElementById("riskScore");
     const confidenceEl = document.getElementById("confidence");
-    const summaryLineEl = document.getElementById("summaryLine");
     const reasonsListEl = document.getElementById("reasonsList");
     const riskFillEl = document.getElementById("riskFill");
     const riskPillEl = document.getElementById("riskPill");
     const sourceLineEl = document.getElementById("sourceLine");
-
-    blockedUrlEl.textContent = originalUrl || "Unknown URL";
-    decisionIdEl.textContent = decisionId;
-    summaryLineEl.textContent = reason;
+    const goBackButton = document.getElementById("goBackButton");
+    const continueButton = document.getElementById("continueButton");
 
     const safeRiskScore = Number.isFinite(riskScore) ? Math.max(0, Math.min(100, riskScore)) : 85;
+
+    blockedUrlEl.textContent = originalUrl || "Unknown URL";
     riskScoreEl.textContent = `${safeRiskScore}/100`;
     confidenceEl.textContent = formatPercent(confidence);
     riskFillEl.style.width = `${safeRiskScore}%`;
-    sourceLineEl.textContent = `Evidence source: ${evidenceSources}`;
-
-    const riskLabel = safeRiskScore >= 80 ? "High Risk" : safeRiskScore >= 50 ? "Medium Risk" : "Low Risk";
-    riskPillEl.textContent = riskLabel;
+    riskPillEl.textContent = safeRiskScore >= 80 ? "This is a scam!" : safeRiskScore >= 50 ? "Suspicious page" : "Low risk";
+    sourceLineEl.textContent = `Evaluated by: ${formatEvidenceSources(evidenceSources)}`;
 
     reasonsListEl.innerHTML = "";
     reasons.forEach(text => {
@@ -63,9 +89,6 @@ document.addEventListener("DOMContentLoaded", () => {
         item.textContent = text;
         reasonsListEl.appendChild(item);
     });
-
-    const goBackButton = document.getElementById("goBackButton");
-    const continueButton = document.getElementById("continueButton");
 
     goBackButton.addEventListener("click", () => {
         if (history.length > 1) {
@@ -75,25 +98,38 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    continueButton.addEventListener("click", () => {
-        let remaining = 3;
+    let continueCompleted = false;
+
+    async function continueToOriginalUrl() {
+        if (continueCompleted) {
+            return;
+        }
+
+        continueCompleted = true;
+        continueButton.textContent = "Opening at your own risk...";
         continueButton.disabled = true;
-        continueButton.textContent = `Continuing in ${remaining}s...`;
 
-        const timer = setInterval(() => {
-            remaining -= 1;
-            if (remaining <= 0) {
-                clearInterval(timer);
-                if (originalUrl) {
-                    window.location.href = originalUrl;
-                } else {
-                    history.back();
-                }
-                return;
+        if (!originalUrl) {
+            history.back();
+            return;
+        }
+
+        chrome.storage.local.set({
+            temporaryBypass: {
+                url: originalUrl,
+                expiresAt: Date.now() + 60000,
+                riskScore: safeRiskScore,
+                confidence: Number(confidence) || 0.72,
+                reason
             }
+        }, () => {
+            window.location.href = originalUrl;
+        });
+    }
 
-            continueButton.textContent = `Continuing in ${remaining}s...`;
-        }, 1000);
+    continueButton.addEventListener("click", event => {
+        event.preventDefault();
+        continueToOriginalUrl();
     });
 
     const falsePositiveForm = document.getElementById("falsePositiveForm");
@@ -111,14 +147,13 @@ document.addEventListener("DOMContentLoaded", () => {
         reportStatus.textContent = "";
 
         try {
-            const response = await fetch("http://localhost:8080/api/v1/false-positive", {
+            const response = await fetch(`${API_BASE_URL}/api/v1/false-positive`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"
                 },
                 body: JSON.stringify({
                     url: originalUrl,
-                    decisionId: decisionId === "Not available" ? null : decisionId,
                     reporterEmail: reporterEmail || null,
                     reason: reportReason
                 })

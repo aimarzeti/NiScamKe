@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ms">
+<html lang="en">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,36 +7,63 @@
     <link rel="stylesheet" href="popup.css" />
 </head>
 <body>
-    <div id="safe-popup" class="popup safe">
-        <div class="shield">&#128737;&#65039;</div>
-        <h1>Ni Scam Ke?</h1>
+    <main class="popup-shell" aria-live="polite">
+        <section class="hero-card">
+            <div class="brand-row">
+                <img class="brand-mark" src="icon-48.png" alt="" aria-hidden="true" />
+                <div>
+                    <p class="eyebrow">Ni Scam Ke?</p>
+                    <h1 id="statusTitle">Checking protection</h1>
+                </div>
+            </div>
 
-        <p class="status">This site is not a scam!</p>
+            <p class="subtitle" id="statusSubtitle">
+                This page is being checked. We will show the latest risk signal here.
+            </p>
 
-        <div class="info-box">
-            <p><strong>Status:</strong> Safe page</p>
-            <p><strong>Overall Risk Level:</strong> Low</p>
-        </div>
+            <div class="risk-panel" id="riskPanel">
+                <div>
+                    <span class="label" id="riskScoreLabel">Risk score</span>
+                    <strong id="riskScore">--/100</strong>
+                </div>
+                <div class="meter" aria-hidden="true">
+                    <span id="riskFill"></span>
+                </div>
+            </div>
 
-        <button id="safe-scan-btn">Scan Again</button>
-    </div>
+            <dl class="details-grid">
+                <div>
+                    <dt id="statusLabel">Status</dt>
+                    <dd id="decisionLabel">Waiting</dd>
+                </div>
+                <div>
+                    <dt id="confidenceTitle">Confidence</dt>
+                    <dd id="confidenceLabel">--</dd>
+                </div>
+                <div>
+                    <dt id="modeTitle">Mode</dt>
+                    <dd id="modeLabel">Not scanned</dd>
+                </div>
+                <div>
+                    <dt id="domainTitle">Domain</dt>
+                    <dd id="domainLabel">Current tab</dd>
+                </div>
+            </dl>
 
-    <div id="danger-popup" class="popup danger">
-        <div class="shield">&#9888;&#65039;</div>
+            <div class="reason-box">
+                <span class="label" id="whyLabel">Gemini AI findings</span>
+                <p id="reasonText">Open a page or scan again to refresh protection status.</p>
+                <ul id="findingsList"></ul>
+            </div>
 
-        <h1>Ni Scam Ke?</h1>
+            <p class="privacy-note" id="privacyNote">
+                Privacy note: Ni Scam Ke? never asks for passwords, OTPs, or banking credentials.
+            </p>
 
-        <p class="status">This site is suspicious!</p>
-
-        <div class="info-box">
-            <p><strong>Status:</strong> Dangerous page!</p>
-            <p><strong>Overall Risk Level:</strong> High</p>
-        </div>
-
-        <button id="danger-scan-btn">Scan Again</button>
-    </div>
+            <button id="scanButton" type="button">Scan Current Page</button>
+        </section>
+    </main>
 
     <script src="popup.js"></script>
 </body>
 </html>
-

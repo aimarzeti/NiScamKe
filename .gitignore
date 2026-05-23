@@ -1,4 +1,6 @@
 /target/
+/testing/results/
+/secrets/
 !.mvn/wrapper/maven-wrapper.jar
 /激progress/
 .clear

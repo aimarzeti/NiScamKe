@@ -9,10 +9,10 @@
 <body>
     <main class="container">
         <section class="warning-card">
-            <p class="risk-pill" id="riskPill">High Risk</p>
-            <h1>Potential scam blocked</h1>
+            <p class="risk-pill" id="riskPill">This is a scam!</p>
+            <h1 id="pageTitle">This website has scam elements!</h1>
             <p class="subtitle" id="summaryLine">
-                We paused this page because it looks like a phishing attempt.
+                We blocked this page before you entered personal information, OTPs, passwords, or payment details.
             </p>
 
             <section class="meta-grid">
@@ -21,11 +21,7 @@
                     <p class="meta-value" id="blockedUrl">-</p>
                 </div>
                 <div class="meta-item">
-                    <p class="meta-label">Decision ID</p>
-                    <p class="meta-value" id="decisionId">-</p>
-                </div>
-                <div class="meta-item">
-                    <p class="meta-label">Risk Score</p>
+                    <p class="meta-label">Risk score</p>
                     <div class="risk-meter">
                         <span id="riskFill"></span>
                     </div>
@@ -38,25 +34,29 @@
             </section>
 
             <section class="risk-box">
-                <h2>Why this was flagged</h2>
+                <h2 id="reasonsTitle">Why is this flagged?</h2>
                 <ul id="reasonsList">
-                    <li>Suspicious link structure detected.</li>
+                    <li>Gemini AI flagged suspicious scam signals.</li>
                 </ul>
                 <p class="evidence" id="sourceLine"></p>
             </section>
 
+            <p class="privacy-note" id="privacyNote">
+                Ni Scam Ke? will never ask for your password, OTP, PIN, or full card details. If you continue, you accept the risk yourself.
+            </p>
+
             <div class="actions">
                 <button class="primary-btn" id="goBackButton">Go to safety</button>
-                <button class="secondary-btn" id="continueButton">Continue anyway (3s hold)</button>
+                <button class="secondary-btn" id="continueButton">Continue anyway</button>
             </div>
 
             <details class="false-positive">
-                <summary>This looks wrong? Report false positive</summary>
+                <summary id="falsePositiveSummary">This looks wrong? Report false positive</summary>
                 <form id="falsePositiveForm">
-                    <label for="reporterEmail">Email (optional)</label>
+                    <label for="reporterEmail" id="emailLabel">Email (optional)</label>
                     <input type="email" id="reporterEmail" placeholder="you@example.com" />
 
-                    <label for="reportReason">Why this is likely safe</label>
+                    <label for="reportReason" id="reportReasonLabel">Why this is likely safe</label>
                     <textarea id="reportReason" rows="3" placeholder="For example: This is my official company login domain."></textarea>
 
                     <button type="submit" class="report-btn" id="reportButton">Submit review request</button>

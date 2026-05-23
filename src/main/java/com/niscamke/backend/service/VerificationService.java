@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -14,6 +15,7 @@ import com.niscamke.backend.controller.LinkVerificationController.ScanRequest;
 import com.niscamke.backend.controller.LinkVerificationController.ScanResponse;
 import com.niscamke.backend.controller.LinkVerificationController.VerificationRequest;
 import com.niscamke.backend.controller.LinkVerificationController.VerificationResponse;
+import com.niscamke.backend.service.GeminiIntegrationService.GeminiAnalysis;
 import com.niscamke.backend.model.DecisionLog;
 import com.niscamke.backend.model.FalsePositiveReport;
 import com.niscamke.backend.model.ScamRegistry;
@@ -30,17 +32,35 @@ import lombok.RequiredArgsConstructor;
 @SuppressWarnings("null")
 public class VerificationService {
 
+    private static final Set<String> TRUSTED_DOMAINS = Set.of(
+            "maybank2u.com.my",
+            "maybank.com",
+            "cimbclicks.com.my",
+            "cimb.com.my",
+            "bankislam.com.my",
+            "beubankislam.com.my",
+            "rhbbank.com.my",
+            "pbebank.com",
+            "publicbank.com.my",
+            "hongleongbank.com.my",
+            "mybsn.com.my"
+    );
+
     private final ScamRegistryRepository scamRegistryRepository;
     private final DecisionLogRepository decisionLogRepository;
     private final UserReportRepository userReportRepository;
     private final FalsePositiveReportRepository falsePositiveReportRepository;
     private final GeminiIntegrationService geminiIntegrationService;
 
-    @Cacheable(value = "domainVerifications", key = "#request.currentUrl")
-public VerificationResponse checkLink(VerificationRequest request) {
+    @Cacheable(value = "domainVerifications", key = "#request.currentUrl + ':' + #request.pageText")
+    public VerificationResponse checkLink(VerificationRequest request) {
         String domain = extractDomainName(request.getCurrentUrl());
         if (domain.isBlank()) {
             return new VerificationResponse("ALLOW", "Unable to verify malformed URL");
+        }
+
+        if (isTrustedDomain(domain)) {
+            return new VerificationResponse("ALLOW", "Trusted official domain. Stay alert before entering sensitive details.");
         }
 
         return scamRegistryRepository.findByDomainName(domain)
@@ -51,11 +71,15 @@ public VerificationResponse checkLink(VerificationRequest request) {
     }
 
     private VerificationResponse analyzeUnknownDomain(String domain, String pageText) {
+        if (isTrustedDomain(domain)) {
+            return new VerificationResponse("ALLOW", "Trusted official domain. Stay alert before entering sensitive details.");
+        }
+
         int structuralRisk = geminiIntegrationService.assessStructuralRisk(domain, pageText);
         boolean isScam = geminiIntegrationService.analyzeWithGemini(domain, pageText);
 
         if (isScam) {
-            // ✅ Only auto-save if BOTH fast-path AND AI agree it's a scam
+            // Only auto-save when the structural checks and AI decision agree.
             if (structuralRisk >= 40) {
                 saveToRegistry(domain);
             }
@@ -69,6 +93,20 @@ public VerificationResponse checkLink(VerificationRequest request) {
     }
 
     public ScanResponse scanUrl(ScanRequest request) {
+        try {
+            return scanUrlInternal(request);
+        } catch (RuntimeException ex) {
+            return new ScanResponse(
+                    "WARN",
+                    50,
+                    0.55,
+                    List.of("Live backend stayed available, but the scan hit an internal error. Avoid entering passwords or OTPs until you rescan."),
+                    "BACKEND_FAILSAFE",
+                    60);
+        }
+    }
+
+    private ScanResponse scanUrlInternal(ScanRequest request) {
         String normalizedUrl = request.getUrl() == null ? "" : request.getUrl().trim();
         String domain = extractDomainName(normalizedUrl);
         if (domain.isBlank()) {
@@ -85,28 +123,50 @@ public VerificationResponse checkLink(VerificationRequest request) {
             return mapLogToScanResponse(invalid, "WARN", List.of("Malformed URL. Unable to verify safely."), 300);
         }
 
-        int structuralRisk = geminiIntegrationService.assessStructuralRisk(domain, request.getPageText());
-        boolean knownScam = scamRegistryRepository.findByDomainName(domain).isPresent();
-        boolean aiScam = knownScam || geminiIntegrationService.analyzeWithGemini(domain, request.getPageText());
+        String pageText = request.getPageText() == null ? "" : request.getPageText();
+        int structuralRisk = geminiIntegrationService.assessStructuralRisk(domain, pageText);
+        boolean trustedDomain = isTrustedDomain(domain);
+        boolean knownScam = !trustedDomain && scamRegistryRepository.findByDomainName(domain).isPresent();
+        String geminiContext = trustedDomain
+                ? "Trusted official domain status: this domain is in the trusted allowlist. Use Gemini to identify what website it is and explain any residual user caution, but do not treat this trusted domain as a scam. Page text: " + pageText
+                : knownScam
+                ? "Community registry status: this domain is already listed as a scam. Explain why it is blocked and what the scam is trying to do. Page text: " + pageText
+                : pageText;
+        String targetLanguage = request.getTargetLanguage() == null || request.getTargetLanguage().isBlank()
+                ? "en"
+                : request.getTargetLanguage();
+        GeminiAnalysis geminiAnalysis = geminiIntegrationService.analyzeWithGeminiDetails(domain, geminiContext, targetLanguage);
+        boolean aiScam = !trustedDomain && (knownScam || geminiAnalysis.scam());
 
-        int riskScore = knownScam ? 95 : structuralRisk;
-        if (!knownScam && aiScam) {
+        int riskScore = trustedDomain ? 8 : knownScam ? 95 : structuralRisk;
+        if (!trustedDomain && !knownScam && aiScam) {
             riskScore = Math.max(70, structuralRisk);
         }
         if (!aiScam && structuralRisk == 0) {
             riskScore = 10;
         }
 
-        String decision = riskScore >= 80 ? "BLOCK" : (riskScore >= 50 ? "WARN" : "ALLOW");
-        double confidence = riskScore >= 80 ? 0.95 : (riskScore >= 50 ? 0.75 : 0.92);
+        String decision = trustedDomain ? "ALLOW" : riskScore >= 80 ? "BLOCK" : (riskScore >= 50 ? "WARN" : "ALLOW");
+        double confidence = trustedDomain ? 0.97 : riskScore >= 80 ? 0.95 : (riskScore >= 50 ? 0.75 : 0.92);
 
-        String reason = knownScam
-                ? "Known scam domain from community intelligence."
+        List<String> reasons = trustedDomain
+                ? mergeTrustedReasons(geminiAnalysis.reasons())
+                : geminiAnalysis.reasons().isEmpty()
+                ? List.of(knownScam
+                        ? "Known scam domain from community intelligence."
+                        : aiScam
+                        ? "AI phishing analysis flagged suspicious signals."
+                        : "No significant phishing indicators detected.")
+                : geminiAnalysis.reasons();
+        String reason = trustedDomain
+                ? reasons.get(0)
+                : knownScam
+                ? reasons.get(0)
                 : aiScam
-                ? "AI phishing analysis flagged suspicious signals."
+                ? reasons.get(0)
                 : "No significant phishing indicators detected.";
 
-        String evidenceSources = knownScam ? "COMMUNITY_DB,RULE_ENGINE" : aiScam ? "AI_MODEL,RULE_ENGINE" : "RULE_ENGINE";
+        String evidenceSources = trustedDomain ? "AI_MODEL,TRUSTED_ALLOWLIST" : knownScam ? "AI_MODEL,COMMUNITY_DB,RULE_ENGINE" : "AI_MODEL,RULE_ENGINE";
         DecisionLog decisionLog = DecisionLog.builder()
                 .url(normalizedUrl)
                 .domainName(domain)
@@ -118,11 +178,11 @@ public VerificationResponse checkLink(VerificationRequest request) {
                 .build();
         decisionLogRepository.save(decisionLog);
 
-        if ("BLOCK".equals(decision) && !knownScam) {
+        if ("BLOCK".equals(decision) && !knownScam && !trustedDomain) {
             saveToRegistry(domain);
         }
 
-        return mapLogToScanResponse(decisionLog, decision, List.of(reason), 300);
+        return mapLogToScanResponse(decisionLog, decision, reasons, 300);
     }
 
     public Optional<DecisionLog> findDecisionByPublicId(String decisionId) {
@@ -201,10 +261,12 @@ public VerificationResponse checkLink(VerificationRequest request) {
         long allowCount = decisionLogRepository.countByDecision("ALLOW");
         long warnCount = decisionLogRepository.countByDecision("WARN");
         long blockCount = decisionLogRepository.countByDecision("BLOCK");
+        long totalScans = allowCount + warnCount + blockCount;
         long pendingFalsePositives = falsePositiveReportRepository.countByStatus("PENDING_REVIEW");
         long approvedFalsePositives = falsePositiveReportRepository.countByStatus("APPROVED");
         long rejectedFalsePositives = falsePositiveReportRepository.countByStatus("REJECTED");
         return new SummaryResponse(
+                totalScans,
                 allowCount,
                 warnCount,
                 blockCount,
@@ -214,12 +276,17 @@ public VerificationResponse checkLink(VerificationRequest request) {
     }
 
     public record SummaryResponse(
+            long totalScans,
             long allowCount,
             long warnCount,
             long blockCount,
             long pendingFalsePositives,
             long approvedFalsePositives,
             long rejectedFalsePositives) {
+    }
+
+    public List<DecisionLog> getRecentDecisions() {
+        return decisionLogRepository.findTop10ByOrderByCreatedAtDesc();
     }
 
     private void saveToRegistry(String domain) {
@@ -278,13 +345,23 @@ public VerificationResponse checkLink(VerificationRequest request) {
 
     private ScanResponse mapLogToScanResponse(DecisionLog log, String decision, List<String> reasons, int ttlSeconds) {
         return new ScanResponse(
-                log.getPublicId(),
                 decision,
                 log.getRiskScore(),
                 log.getConfidence(),
                 reasons,
                 log.getEvidenceSources(),
                 ttlSeconds);
+    }
+
+    private List<String> mergeTrustedReasons(List<String> geminiReasons) {
+        if (geminiReasons == null || geminiReasons.isEmpty()) {
+            return List.of("Trusted official domain. Stay alert and verify the URL before entering sensitive details.");
+        }
+
+        java.util.ArrayList<String> reasons = new java.util.ArrayList<>();
+        reasons.add("Trusted official domain. Stay alert and verify the URL before entering sensitive details.");
+        reasons.addAll(geminiReasons);
+        return reasons;
     }
 
     private String extractDomainName(String urlString) {
@@ -319,6 +396,19 @@ public VerificationResponse checkLink(VerificationRequest request) {
         }
 
         return domain;
+    }
+
+    private boolean isTrustedDomain(String domain) {
+        if (domain == null || domain.isBlank()) {
+            return false;
+        }
+
+        String normalizedDomain = domain.toLowerCase(Locale.ROOT);
+        return TRUSTED_DOMAINS.stream()
+                .anyMatch(trustedDomain -> normalizedDomain.equals(trustedDomain)
+                        || normalizedDomain.endsWith("." + trustedDomain))
+                || normalizedDomain.endsWith(".gov.my")
+                || normalizedDomain.endsWith(".edu.my");
     }
 }
 
