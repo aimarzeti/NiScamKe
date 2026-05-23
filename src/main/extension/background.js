@@ -35,6 +35,26 @@ const BANK_KEYWORDS = [
     "agro"
 ];
 
+const BANK_LOOKALIKE_TERMS = [
+    "maybank",
+    "maybank2u",
+    "cimb",
+    "cimbclicks",
+    "bankislam",
+    "bimb",
+    "rhb",
+    "rhbbank",
+    "hongleong",
+    "hongleongbank",
+    "publicbank",
+    "pbebank",
+    "ambank",
+    "affin",
+    "bsn",
+    "mybsn",
+    "agrobank"
+];
+
 const SUSPICIOUS_PATTERNS = [
     "secure-login",
     "verify-account",
@@ -46,6 +66,24 @@ const SUSPICIOUS_PATTERNS = [
     "bankislam-secure",
     "otp",
     "claim"
+];
+
+const SUSPICIOUS_COPY_TYPOS = [
+    "securty",
+    "securrity",
+    "verfy",
+    "verifcation",
+    "verificaton",
+    "accout",
+    "acount",
+    "passw0rd",
+    "pasword",
+    "logln",
+    "l0gin",
+    "immediatly",
+    "suspention",
+    "restricton",
+    "unathorized"
 ];
 
 const HIGH_RISK_TLDS = [".click", ".online", ".site", ".top", ".xyz", ".icu", ".test"];
@@ -72,6 +110,55 @@ function matchesTrustedDomain(host) {
     return TRUSTED_DOMAINS.some(domain => host === domain || host.endsWith(`.${domain}`)) ||
         host.endsWith(".gov.my") ||
         host.endsWith(".edu.my");
+}
+
+function levenshteinDistance(first, second) {
+    let previous = Array.from({ length: second.length + 1 }, (_, index) => index);
+    let current = Array(second.length + 1).fill(0);
+
+    for (let firstIndex = 1; firstIndex <= first.length; firstIndex += 1) {
+        current[0] = firstIndex;
+        for (let secondIndex = 1; secondIndex <= second.length; secondIndex += 1) {
+            const substitutionCost = first[firstIndex - 1] === second[secondIndex - 1] ? 0 : 1;
+            current[secondIndex] = Math.min(
+                current[secondIndex - 1] + 1,
+                previous[secondIndex] + 1,
+                previous[secondIndex - 1] + substitutionCost
+            );
+        }
+
+        [previous, current] = [current, previous];
+    }
+
+    return previous[second.length];
+}
+
+function containsNearMatch(text, target, threshold) {
+    const minLength = Math.max(1, target.length - threshold);
+    const maxLength = Math.min(text.length, target.length + threshold);
+
+    for (let length = minLength; length <= maxLength; length += 1) {
+        for (let index = 0; index + length <= text.length; index += 1) {
+            const candidate = text.slice(index, index + length);
+            if (levenshteinDistance(candidate, target) <= threshold) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+function isPossibleBankTypo(host) {
+    const simplifiedHost = host.replace(/[^a-z0-9]/g, "");
+
+    return BANK_LOOKALIKE_TERMS.some(term => {
+        if (term.length <= 4) {
+            return false;
+        }
+
+        return !simplifiedHost.includes(term) && containsNearMatch(simplifiedHost, term, 2);
+    });
 }
 
 function normalizeVerdictPayload(rawVerdict, scannedUrl, options = {}) {
@@ -187,6 +274,7 @@ function evaluateWithLocalRules(incomingMessage) {
     }
 
     const targetsBank = BANK_KEYWORDS.some(keyword => host.includes(keyword));
+    const possibleBankTypo = isPossibleBankTypo(host);
     const matchedPattern = SUSPICIOUS_PATTERNS.find(pattern => normalizedUrl.includes(pattern));
     const highRiskTld = HIGH_RISK_TLDS.some(tld => host.endsWith(tld));
     const establishedMalaysianTld = host.endsWith(".my");
@@ -194,6 +282,7 @@ function evaluateWithLocalRules(incomingMessage) {
         pageText.includes("password") ||
         pageText.includes("kata laluan") ||
         pageText.includes("verify your account");
+    const hasSuspiciousCopyTypo = SUSPICIOUS_COPY_TYPOS.some(pattern => pageText.includes(pattern));
 
     if (targetsBank && matchedPattern) {
         return normalizeVerdictPayload({
@@ -208,6 +297,29 @@ function evaluateWithLocalRules(incomingMessage) {
         }, targetUrl, { scanMode: "LOCAL_RULES", backendAvailable: false });
     }
 
+    if (possibleBankTypo && (matchedPattern || highRiskTld || asksForSensitiveInfo)) {
+        return normalizeVerdictPayload({
+            status: "BLOCK",
+            riskScore: 90,
+            confidence: 0.9,
+            reasons: [
+                "This domain looks like a misspelled banking impersonation.",
+                "Typo-style brand changes are common in phishing links."
+            ],
+            evidenceSources: "LOCAL_TYPOSQUATTING_RULES"
+        }, targetUrl, { scanMode: "LOCAL_RULES", backendAvailable: false });
+    }
+
+    if (hasSuspiciousCopyTypo && asksForSensitiveInfo) {
+        return normalizeVerdictPayload({
+            status: "WARN",
+            riskScore: 75,
+            confidence: 0.8,
+            reasons: ["The page contains typo-heavy credential or verification language."],
+            evidenceSources: "LOCAL_COPY_ANALYSIS"
+        }, targetUrl, { scanMode: "LOCAL_RULES", backendAvailable: false });
+    }
+
     if (targetsBank && establishedMalaysianTld) {
         return normalizeVerdictPayload({
             status: "WARN",
@@ -215,6 +327,16 @@ function evaluateWithLocalRules(incomingMessage) {
             confidence: 0.74,
             reasons: ["This appears bank-related but is not in the trusted list yet. Verify before entering sensitive details."],
             evidenceSources: "LOCAL_REVIEW_REQUIRED"
+        }, targetUrl, { scanMode: "LOCAL_RULES", backendAvailable: false });
+    }
+
+    if (possibleBankTypo) {
+        return normalizeVerdictPayload({
+            status: "WARN",
+            riskScore: 65,
+            confidence: 0.76,
+            reasons: ["This domain is close to a known Malaysian banking name, but is not trusted."],
+            evidenceSources: "LOCAL_TYPOSQUATTING_RULES"
         }, targetUrl, { scanMode: "LOCAL_RULES", backendAvailable: false });
     }
 

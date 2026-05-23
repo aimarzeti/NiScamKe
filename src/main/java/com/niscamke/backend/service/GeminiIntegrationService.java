@@ -35,8 +35,21 @@ public class GeminiIntegrationService {
         "publicbank", "ambank", "affin", "bsn", "agro"
     );
 
+    private static final List<String> BANK_LOOKALIKE_TERMS = List.of(
+        "maybank", "maybank2u", "cimb", "cimbclicks", "bankislam",
+        "bimb", "rhb", "rhbbank", "hongleong", "hongleongbank",
+        "publicbank", "pbebank", "ambank", "affin", "bsn",
+        "mybsn", "agrobank"
+    );
+
     private static final List<String> SUSPICIOUS_DOMAIN_TOKENS = List.of(
         "secure", "login", "verify", "update", "support", "account", "otp", "claim"
+    );
+
+    private static final List<String> SUSPICIOUS_COPY_TYPOS = List.of(
+        "securty", "securrity", "verfy", "verifcation", "verificaton",
+        "accout", "acount", "passw0rd", "pasword", "logln", "l0gin",
+        "immediatly", "suspention", "restricton", "unathorized"
     );
 
     private static final List<String> HIGH_RISK_TLDS = List.of(
@@ -78,7 +91,8 @@ public class GeminiIntegrationService {
             String systemInstructionPrompt = 
                 "You are a cybersecurity expert specializing in phishing and scam detection. " +
                 "Analyze the following domain and page content for signs of phishing, impersonation, or scam. " +
-                "Consider: domain spoofing (similar to legitimate banks), fake login forms, suspicious URLs, urgency tactics, requests for credentials. " +
+                "Consider: domain spoofing (similar to legitimate banks), typosquatting, misspelled brand names, typo-filled credential requests, fake login forms, suspicious URLs, urgency tactics, requests for credentials. " +
+                "If the domain or page text appears to imitate a bank with small spelling changes or suspicious typos, mark it as SCAM. " +
                 "Respond with ONLY a single word: SCAM or SAFE. No punctuation, no explanation, no extra text.";
 
             String analyticalPayload = String.format(
@@ -225,6 +239,8 @@ public class GeminiIntegrationService {
         boolean targetsMalaysianBank = BANK_KEYWORDS.stream()
                 .anyMatch(normalizedDomain::contains);
 
+        boolean possibleBankTypo = isPossibleBankTypo(normalizedDomain);
+
         boolean hasSuspiciousToken = SUSPICIOUS_DOMAIN_TOKENS.stream()
                 .anyMatch(normalizedDomain::contains);
 
@@ -241,8 +257,19 @@ public class GeminiIntegrationService {
                 || normalizedPageText.contains("akaun")
                 || normalizedPageText.contains("kata laluan");
 
+        boolean hasSuspiciousCopyTypo = SUSPICIOUS_COPY_TYPOS.stream()
+                .anyMatch(normalizedPageText::contains);
+
         if (targetsMalaysianBank && hasSuspiciousToken) {
             return 100;
+        }
+
+        if (possibleBankTypo && (hasSuspiciousToken || highRiskTld || asksForSensitiveInfo)) {
+            return 90;
+        }
+
+        if (hasSuspiciousCopyTypo && asksForSensitiveInfo) {
+            return 75;
         }
 
         if (targetsMalaysianBank && establishedMalaysianTld) {
@@ -251,6 +278,10 @@ public class GeminiIntegrationService {
 
         if (targetsMalaysianBank) {
             return 90;
+        }
+
+        if (possibleBankTypo) {
+            return 65;
         }
 
         if (hasSuspiciousToken && highRiskTld) {
@@ -265,7 +296,69 @@ public class GeminiIntegrationService {
             return 60;
         }
 
+        if (hasSuspiciousCopyTypo && (hasSuspiciousToken || highRiskTld)) {
+            return 55;
+        }
+
         return 10;
+    }
+
+    private boolean isPossibleBankTypo(String normalizedDomain) {
+        String simplifiedDomain = normalizedDomain.replaceAll("[^a-z0-9]", "");
+
+        for (String term : BANK_LOOKALIKE_TERMS) {
+            if (term.length() <= 4) {
+                continue;
+            }
+
+            if (!simplifiedDomain.contains(term) && containsNearMatch(simplifiedDomain, term, 2)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private boolean containsNearMatch(String text, String target, int threshold) {
+        int targetLength = target.length();
+        int minLength = Math.max(1, targetLength - threshold);
+        int maxLength = Math.min(text.length(), targetLength + threshold);
+
+        for (int length = minLength; length <= maxLength; length++) {
+            for (int index = 0; index + length <= text.length(); index++) {
+                String candidate = text.substring(index, index + length);
+                if (levenshteinDistance(candidate, target) <= threshold) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private int levenshteinDistance(String first, String second) {
+        int[] previous = new int[second.length() + 1];
+        int[] current = new int[second.length() + 1];
+
+        for (int index = 0; index <= second.length(); index++) {
+            previous[index] = index;
+        }
+
+        for (int firstIndex = 1; firstIndex <= first.length(); firstIndex++) {
+            current[0] = firstIndex;
+            for (int secondIndex = 1; secondIndex <= second.length(); secondIndex++) {
+                int substitutionCost = first.charAt(firstIndex - 1) == second.charAt(secondIndex - 1) ? 0 : 1;
+                current[secondIndex] = Math.min(
+                        Math.min(current[secondIndex - 1] + 1, previous[secondIndex] + 1),
+                        previous[secondIndex - 1] + substitutionCost);
+            }
+
+            int[] temp = previous;
+            previous = current;
+            current = temp;
+        }
+
+        return previous[second.length()];
     }
 
     private boolean isTrustedDomain(String normalizedDomain) {
