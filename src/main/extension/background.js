@@ -13,6 +13,22 @@ const MOCK_MODE = true;
 // Upstream target route for the Spring Boot REST framework API verification endpoint
 const LIVE_SCAMSHIELD_API_ROUTE = "http://localhost:8080/api/v1/verify-link";
 
+function pushBrowserNotification(status, url, scamType = "") {
+    const isBlocked = status === "BLOCK";
+    const title = isBlocked ? "ScamShield Alert" : "ScamShield Scan Complete";
+    const message = isBlocked
+        ? `Potential scam detected: ${scamType || "Suspicious pattern"}\n${url}`
+        : `No major scam signal detected for:\n${url}`;
+
+    chrome.notifications.create({
+        type: "basic",
+        iconUrl: chrome.runtime.getURL("notification-icon.png"),
+        title,
+        message,
+        priority: isBlocked ? 2 : 0
+    });
+}
+
 chrome.runtime.onMessage.addListener((incomingMessage, sender, dispatchVerdictCallback) => {
     if (incomingMessage.action === "evaluateNetworkTarget") {
         const targetUrl = incomingMessage.currentUrl.toLowerCase();
@@ -52,12 +68,15 @@ chrome.runtime.onMessage.addListener((incomingMessage, sender, dispatchVerdictCa
 
             if (isTrusted) {
                 chrome.storage.local.set({ scamStatus: "ALLOW", scamType: "Official trusted domain" });
+                pushBrowserNotification("ALLOW", incomingMessage.currentUrl, "Official trusted domain");
                 dispatchVerdictCallback({ status: "ALLOW" });
             } else if (isSuspicious) {
                 chrome.storage.local.set({ scamStatus: "BLOCK", scamType: "Bank Impersonation Scam" });
+                pushBrowserNotification("BLOCK", incomingMessage.currentUrl, "Bank Impersonation Scam");
                 dispatchVerdictCallback({ status: "BLOCK" });
             } else {
                 chrome.storage.local.set({ scamStatus: "ALLOW", scamType: "None Detected" });
+                pushBrowserNotification("ALLOW", incomingMessage.currentUrl, "None Detected");
                 dispatchVerdictCallback({ status: "ALLOW" });
             }
 
@@ -79,6 +98,11 @@ chrome.runtime.onMessage.addListener((incomingMessage, sender, dispatchVerdictCa
             return response.json();
         })
         .then(verdictDataContract => {
+            pushBrowserNotification(
+                verdictDataContract.status,
+                incomingMessage.currentUrl,
+                verdictDataContract.scamType || ""
+            );
             dispatchVerdictCallback({ status: verdictDataContract.status });
         })
         .catch(error => {
