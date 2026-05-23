@@ -2,11 +2,25 @@ document.addEventListener("DOMContentLoaded", function () {
     const goBackButton = document.querySelector(".primary-btn");
     const continueButton = document.querySelector(".secondary-btn");
 
+    // ✅ FIX: Read the original blocked URL from the query string
+    const params = new URLSearchParams(window.location.search);
+    const originalUrl = params.get("blocked");
+
     goBackButton.addEventListener("click", function () {
-        window.location.href = "https://www.google.com";
+        // Go back to previous page, or Google if no history
+        if (history.length > 1) {
+            history.back();
+        } else {
+            window.location.href = "https://www.google.com";
+        }
     });
 
     continueButton.addEventListener("click", function () {
-        alert("Proceeding to the potentially harmful site is not recommended. Please consider going back to safety.");
-    }); 
+        // ✅ FIX: Navigate to the original site instead of just alerting
+        if (originalUrl) {
+            window.location.href = originalUrl;
+        } else {
+            history.back();
+        }
+    });
 });
