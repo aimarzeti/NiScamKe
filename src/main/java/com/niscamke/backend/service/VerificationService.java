@@ -191,6 +191,31 @@ public VerificationResponse checkLink(VerificationRequest request) {
         });
     }
 
+    public SummaryResponse getSummary() {
+        long allowCount = decisionLogRepository.countByDecision("ALLOW");
+        long warnCount = decisionLogRepository.countByDecision("WARN");
+        long blockCount = decisionLogRepository.countByDecision("BLOCK");
+        long pendingFalsePositives = falsePositiveReportRepository.countByStatus("PENDING_REVIEW");
+        long approvedFalsePositives = falsePositiveReportRepository.countByStatus("APPROVED");
+        long rejectedFalsePositives = falsePositiveReportRepository.countByStatus("REJECTED");
+        return new SummaryResponse(
+                allowCount,
+                warnCount,
+                blockCount,
+                pendingFalsePositives,
+                approvedFalsePositives,
+                rejectedFalsePositives);
+    }
+
+    public record SummaryResponse(
+            long allowCount,
+            long warnCount,
+            long blockCount,
+            long pendingFalsePositives,
+            long approvedFalsePositives,
+            long rejectedFalsePositives) {
+    }
+
     private void saveToRegistry(String domain) {
         LocalDateTime now = LocalDateTime.now();
         ScamRegistry scamRegistry = ScamRegistry.builder()

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NiScamKe Dashboard</title>
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --card: #ffffff;
+      --text: #10243e;
+      --muted: #5e6d80;
+      --ok: #0f9d58;
+      --warn: #f39c12;
+      --block: #d93025;
+      --accent: #0b5ed7;
+    }
+    body { margin: 0; font-family: "Segoe UI", Tahoma, sans-serif; background: var(--bg); color: var(--text); }
+    .wrap { max-width: 960px; margin: 40px auto; padding: 0 16px; }
+    h1 { margin-bottom: 8px; }
+    p { color: var(--muted); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(210px,1fr)); gap: 12px; margin-top: 16px; }
+    .card { background: var(--card); border-radius: 12px; padding: 16px; box-shadow: 0 2px 14px rgba(16,36,62,.08); }
+    .label { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+    .value { font-size: 30px; font-weight: 700; }
+    .ok { color: var(--ok); } .warn { color: var(--warn); } .block { color: var(--block); }
+    .actions { margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap; }
+    a.btn { text-decoration: none; background: var(--accent); color: #fff; padding: 10px 14px; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>NiScamKe Live Dashboard</h1>
+    <p>Lightweight hackathon view for judges and live demo.</p>
+    <div class="grid">
+      <div class="card"><div class="label">ALLOW</div><div id="allowCount" class="value ok">0</div></div>
+      <div class="card"><div class="label">WARN</div><div id="warnCount" class="value warn">0</div></div>
+      <div class="card"><div class="label">BLOCK</div><div id="blockCount" class="value block">0</div></div>
+      <div class="card"><div class="label">False Positive Pending</div><div id="pendingFp" class="value">0</div></div>
+      <div class="card"><div class="label">False Positive Approved</div><div id="approvedFp" class="value">0</div></div>
+      <div class="card"><div class="label">False Positive Rejected</div><div id="rejectedFp" class="value">0</div></div>
+    </div>
+    <div class="actions">
+      <a class="btn" href="/review.html">Open Review Queue</a>
+      <a class="btn" href="/api/v1/false-positive?status=PENDING_REVIEW">Raw Pending JSON</a>
+    </div>
+  </div>
+  <script>
+    async function loadSummary() {
+      const res = await fetch('/api/v1/admin/summary');
+      const data = await res.json();
+      document.getElementById('allowCount').textContent = data.allowCount ?? 0;
+      document.getElementById('warnCount').textContent = data.warnCount ?? 0;
+      document.getElementById('blockCount').textContent = data.blockCount ?? 0;
+      document.getElementById('pendingFp').textContent = data.pendingFalsePositives ?? 0;
+      document.getElementById('approvedFp').textContent = data.approvedFalsePositives ?? 0;
+      document.getElementById('rejectedFp').textContent = data.rejectedFalsePositives ?? 0;
+    }
+    loadSummary();
+    setInterval(loadSummary, 5000);
+  </script>
+</body>
+</html>

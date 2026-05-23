@@ -8,4 +8,5 @@ import com.niscamke.backend.model.FalsePositiveReport;
 
 public interface FalsePositiveReportRepository extends JpaRepository<FalsePositiveReport, Long> {
     List<FalsePositiveReport> findByStatus(String status);
+    long countByStatus(String status);
 }

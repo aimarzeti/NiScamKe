@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NiScamKe False Positive Review</title>
+  <style>
+    body { font-family: "Segoe UI", Tahoma, sans-serif; margin: 0; background: #f5f7fb; color: #12263a; }
+    .wrap { max-width: 980px; margin: 32px auto; padding: 0 16px; }
+    h1 { margin-bottom: 4px; }
+    .muted { color: #596b81; margin-bottom: 16px; }
+    .row { background: #fff; border-radius: 10px; padding: 12px; margin-bottom: 10px; box-shadow: 0 2px 10px rgba(18,38,58,.08); }
+    .meta { font-size: 13px; color: #596b81; margin-top: 4px; }
+    button { border: 0; border-radius: 8px; padding: 8px 12px; margin-right: 8px; cursor: pointer; }
+    .approve { background: #0f9d58; color: #fff; }
+    .reject { background: #d93025; color: #fff; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>False Positive Queue</h1>
+    <div class="muted">Approve = unflag domain, Reject = keep protection active.</div>
+    <div id="list"></div>
+  </div>
+  <script>
+    async function api(path, opts) {
+      const res = await fetch(path, opts);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+
+    async function review(id, status) {
+      await api('/api/v1/false-positive/' + id + '/status', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status,
+          reviewNote: status === 'APPROVED' ? 'Reviewed legit by moderator.' : 'Reviewed and still suspicious.'
+        })
+      });
+      await load();
+    }
+
+    async function load() {
+      const data = await api('/api/v1/false-positive?status=PENDING_REVIEW');
+      const list = document.getElementById('list');
+      list.innerHTML = '';
+      if (!data.length) {
+        list.innerHTML = '<div class="row">No pending false-positive reports.</div>';
+        return;
+      }
+      data.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'row';
+        div.innerHTML = `
+          <div><strong>${item.domainName}</strong></div>
+          <div>${item.url}</div>
+          <div class="meta">Reason: ${item.reason || '-'} | Reporter: ${item.reporterEmail || 'anonymous'}</div>
+        `;
+        const approve = document.createElement('button');
+        approve.className = 'approve';
+        approve.textContent = 'Approve';
+        approve.onclick = () => review(item.id, 'APPROVED');
+
+        const reject = document.createElement('button');
+        reject.className = 'reject';
+        reject.textContent = 'Reject';
+        reject.onclick = () => review(item.id, 'REJECTED');
+
+        div.appendChild(document.createElement('hr'));
+        div.appendChild(approve);
+        div.appendChild(reject);
+        list.appendChild(div);
+      });
+    }
+
+    load();
+  </script>
+</body>
+</html>

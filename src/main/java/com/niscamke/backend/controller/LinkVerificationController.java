@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.niscamke.backend.model.DecisionLog;
 import com.niscamke.backend.model.FalsePositiveReport;
 import com.niscamke.backend.service.VerificationService;
+import com.niscamke.backend.service.VerificationService.SummaryResponse;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -109,6 +110,11 @@ public class LinkVerificationController {
                 .map(this::mapDecisionResponse)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/admin/summary")
+    public ResponseEntity<SummaryResponse> getAdminSummary() {
+        return ResponseEntity.ok(verificationService.getSummary());
     }
 
     @Data
