@@ -29,7 +29,7 @@
             // DIAGRAM FLOW EXECUTION: If verdict state evaluates to BLOCK, immediately render the protection screen
             if (backendServerVerdict && backendServerVerdict.status === "BLOCK") {
                 console.warn("🚨 [ScamShield AI] Threat Verified! Diverting session away from scam page...");
-                window.location.href = chrome.runtime.getURL("block.html");
+                window.location.href = chrome.runtime.getURL("blocked.html");
             }
         });
     }
