@@ -6,12 +6,17 @@
 const API_BASE_URL = "http://localhost:8080";
 const LIVE_BACKEND_ENABLED = true;
 const LIVE_SCAMSHIELD_SCAN_ROUTE = `${API_BASE_URL}/api/v1/scan-url`;
+<<<<<<< Updated upstream
 const BADGE_COLORS = {
     ALLOW: "#11845b",
     WARN: "#b86b00",
     BLOCK: "#c1281f",
     USER_BYPASS: "#b86b00"
 };
+=======
+const BACKEND_SCAN_RETRY_COUNT = 2;
+const BACKEND_SCAN_RETRY_DELAY_MS = 500;
+>>>>>>> Stashed changes
 const RECENT_PREFLIGHT_REDIRECT_TTL_MS = 3000;
 const recentPreflightRedirects = new Map();
 
@@ -252,10 +257,13 @@ function buildBlockedPageUrl(verdict, blockedUrl) {
         params.set("confidence", String(verdict.confidence));
     }
 
+<<<<<<< Updated upstream
     if (verdict.decisionId) {
         params.set("decisionId", verdict.decisionId);
     }
 
+=======
+>>>>>>> Stashed changes
     if (Array.isArray(verdict.reasons) && verdict.reasons.length > 0) {
         params.set("reasons", JSON.stringify(verdict.reasons.slice(0, 5)));
     }
@@ -267,6 +275,7 @@ function buildBlockedPageUrl(verdict, blockedUrl) {
     return `${chrome.runtime.getURL("blocked.html")}?${params.toString()}`;
 }
 
+<<<<<<< Updated upstream
 function getBadgeText(verdict) {
     if (!verdict) {
         return "";
@@ -425,6 +434,70 @@ if (chrome.webNavigation && chrome.webNavigation.onBeforeNavigate) {
                 scanMode: "NAVIGATION_PREFLIGHT"
             }, { tab: { id: details.tabId } });
         }
+=======
+function persistLastScan(verdict) {
+    chrome.storage.local.set({
+        scamStatus: verdict.status,
+        scamType: verdict.reason,
+        lastScan: verdict
+>>>>>>> Stashed changes
+    });
+}
+
+function shouldSkipPreflightNavigation(details) {
+    if (!details || details.frameId !== 0 || details.tabId < 0 || !details.url) {
+        return true;
+    }
+
+    if (!details.url.startsWith("http://") && !details.url.startsWith("https://")) {
+        return true;
+    }
+
+    if (details.url.startsWith(API_BASE_URL)) {
+        return true;
+    }
+
+    const lastRedirectAt = recentPreflightRedirects.get(details.url);
+    return Boolean(lastRedirectAt && Date.now() - lastRedirectAt < RECENT_PREFLIGHT_REDIRECT_TTL_MS);
+}
+
+function blockPreflightNavigation(details, verdict) {
+    recentPreflightRedirects.set(details.url, Date.now());
+    persistLastScan(verdict);
+    pushBrowserNotification(verdict, true);
+
+    chrome.tabs.update(details.tabId, {
+        url: buildBlockedPageUrl(verdict, details.url)
+    }, () => {
+        const ignoredLastError = chrome.runtime.lastError;
+    });
+}
+
+if (chrome.webNavigation && chrome.webNavigation.onBeforeNavigate) {
+    chrome.webNavigation.onBeforeNavigate.addListener(details => {
+        if (shouldSkipPreflightNavigation(details)) {
+            return;
+        }
+
+        const verdict = evaluateWithLocalRules({
+            currentUrl: details.url,
+            pageText: details.url
+        });
+
+        if (verdict.status !== "BLOCK") {
+            return;
+        }
+
+        blockPreflightNavigation(details, {
+            ...verdict,
+            reason: "Top-level navigation was blocked before the fake page could load.",
+            reasons: [
+                "Top-level navigation was blocked before the fake page could load.",
+                ...verdict.reasons
+            ],
+            evidenceSources: `${verdict.evidenceSources},NAVIGATION_PREFLIGHT`,
+            scanMode: "NAVIGATION_PREFLIGHT"
+        });
     });
 }
 

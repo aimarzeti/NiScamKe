@@ -12,7 +12,8 @@
     "webNavigation"
   ],
   "host_permissions": [
-    "http://localhost:8080/*"
+    "http://*/*",
+    "https://*/*"
   ],
   "background": {
     "service_worker": "background.js"

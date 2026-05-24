@@ -26,6 +26,7 @@ function formatPercent(value) {
     return `${Math.round(numeric * 100)}%`;
 }
 
+<<<<<<< Updated upstream
 async function readErrorMessage(response) {
     try {
         const data = await response.json();
@@ -33,6 +34,36 @@ async function readErrorMessage(response) {
     } catch (error) {
         return `Request failed with status ${response.status}.`;
     }
+=======
+function formatEvidenceSources(evidenceSources) {
+    const sourceLabels = {
+        AI_MODEL: "Gemini AI",
+        RULE_ENGINE: "rule engine",
+        COMMUNITY_DB: "community database",
+        INPUT_VALIDATION: "input validation",
+        USER_BYPASS: "user bypass",
+        FAILSAFE: "failsafe",
+        LOCAL_APPLICATION_SCAM_RULES: "local application scam rules",
+        LOCAL_BANK_MIMIC_RULES: "local banking mimic rules",
+        LOCAL_COPY_ANALYSIS: "local typo and copy analysis",
+        LOCAL_INPUT_VALIDATION: "local input validation",
+        LOCAL_REVIEW_REQUIRED: "local review rules",
+        LOCAL_RISK_RULES: "local risk rules",
+        LOCAL_RULE_ENGINE: "local rule engine",
+        LOCAL_TRUST_LIST: "local trusted list",
+        LOCAL_TYPOSQUATTING_RULES: "local typosquatting rules",
+        NAVIGATION_PREFLIGHT: "navigation preflight",
+        BACKEND_FAILSAFE: "backend failsafe",
+        TRUSTED_ALLOWLIST: "trusted allowlist"
+    };
+
+    return String(evidenceSources || "AI_MODEL")
+        .split(",")
+        .map(source => source.trim())
+        .filter(Boolean)
+        .map(source => sourceLabels[source] || source)
+        .join(", ");
+>>>>>>> Stashed changes
 }
 
 document.addEventListener("DOMContentLoaded", () => {
