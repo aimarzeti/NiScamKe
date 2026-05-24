@@ -88,6 +88,11 @@ function renderPopup(scan) {
     const copy = UI_COPY.states[displayStatus] || UI_COPY.states.WAITING;
     const riskScore = Number.isFinite(Number(scan?.riskScore)) ? Number(scan.riskScore) : 0;
     const reason = scan?.reason || "No scan result yet. Click scan to refresh the current page.";
+    const findings = Array.isArray(scan?.reasons)
+        ? scan.reasons.filter(Boolean)
+        : reason
+            ? [reason]
+            : [];
 
     setCardState(displayStatus);
 

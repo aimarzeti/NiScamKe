@@ -72,6 +72,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const evidenceSources = params.get("sources") || "AI_MODEL";
     const riskScore = Number(params.get("riskScore"));
     const confidence = params.get("confidence");
+    const decisionId = params.get("decisionId") || null;
     const reasons = decodeReasons(params.get("reasons"), reason);
 
     const blockedUrlEl = document.getElementById("blockedUrl");
@@ -90,7 +91,7 @@ document.addEventListener("DOMContentLoaded", () => {
     riskScoreEl.textContent = `${safeRiskScore}/100`;
     confidenceEl.textContent = formatPercent(confidence);
     riskFillEl.style.width = `${safeRiskScore}%`;
-    sourceLineEl.textContent = `Evidence source: ${evidenceSources}`;
+    sourceLineEl.textContent = `Evidence source: ${formatEvidenceSources(evidenceSources)}`;
 
     const riskLabel = safeRiskScore >= 80 ? "High Risk" : safeRiskScore >= 50 ? "Medium Risk" : "Low Risk";
     riskPillEl.textContent = riskLabel;
@@ -166,6 +167,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 },
                 body: JSON.stringify({
                     url: originalUrl,
+                    decisionId,
                     reporterEmail: reporterEmail || null,
                     reason: reportReason
                 })

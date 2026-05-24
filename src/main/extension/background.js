@@ -234,11 +234,15 @@ function normalizeVerdictPayload(rawVerdict, scannedUrl, options = {}) {
         status,
         scannedUrl,
         domain: normalizeHost(scannedUrl) || "unknown",
+        decisionId: rawVerdict.decisionId || null,
         reason: primaryReason,
         reasons,
         riskScore,
         confidence: toNumber(rawVerdict.confidence, status === "BLOCK" ? 0.95 : status === "WARN" ? 0.76 : 0.92),
         evidenceSources: rawVerdict.evidenceSources || options.evidenceSources || "RULE_ENGINE",
+        threatType: rawVerdict.threatType || null,
+        aiExplanation: rawVerdict.aiExplanation || null,
+        scoreBreakdown: rawVerdict.scoreBreakdown || null,
         scanMode: options.scanMode || rawVerdict.scanMode || "LIVE_BACKEND",
         backendAvailable: options.backendAvailable !== false,
         scannedAt: new Date().toISOString()
@@ -530,6 +534,8 @@ function evaluateWithLocalRules(incomingMessage) {
         normalizedUrl.includes(term) || pageText.includes(term)
     );
     const collectsPersonalContact = PERSONAL_CONTACT_TERMS.some(term => pageText.includes(term));
+    const highConfidenceBankMimic = (targetsBank || possibleBankTypo) &&
+        (matchedPattern || highRiskTld || asksForSensitiveInfo);
 
     if (highConfidenceBankMimic) {
         return normalizeVerdictPayload({
@@ -675,6 +681,44 @@ function evaluateViaBackend(incomingMessage) {
             scanMode: "LIVE_BACKEND",
             backendAvailable: true
         }));
+}
+
+async function evaluateViaBackendWithRetry(incomingMessage) {
+    let lastError = null;
+
+    for (let attempt = 0; attempt <= BACKEND_SCAN_RETRY_COUNT; attempt += 1) {
+        try {
+            return await evaluateViaBackend(incomingMessage);
+        } catch (error) {
+            lastError = error;
+            if (attempt < BACKEND_SCAN_RETRY_COUNT) {
+                await delay(BACKEND_SCAN_RETRY_DELAY_MS);
+            }
+        }
+    }
+
+    throw lastError || new Error("Backend scan failed.");
+}
+
+function applyClientSideContext(verdict, incomingMessage) {
+    if (!verdict || incomingMessage.credentialFieldDetected !== true) {
+        return verdict;
+    }
+
+    const credentialReason = incomingMessage.credentialFieldLabel
+        ? `Sensitive field detected before entry: ${incomingMessage.credentialFieldLabel}.`
+        : "Sensitive credential field detected before entry.";
+    const reasons = Array.isArray(verdict.reasons) ? [...verdict.reasons] : [];
+
+    if (!reasons.includes(credentialReason)) {
+        reasons.push(credentialReason);
+    }
+
+    return {
+        ...verdict,
+        reasons,
+        reason: verdict.reason || credentialReason
+    };
 }
 
 chrome.runtime.onMessage.addListener((incomingMessage, sender, dispatchVerdictCallback) => {

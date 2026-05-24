@@ -2,12 +2,12 @@ package com.niscamke.backend.service;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -19,7 +19,6 @@ import com.niscamke.backend.controller.LinkVerificationController.ScanRequest;
 import com.niscamke.backend.controller.LinkVerificationController.ScanResponse;
 import com.niscamke.backend.controller.LinkVerificationController.VerificationRequest;
 import com.niscamke.backend.controller.LinkVerificationController.VerificationResponse;
-import com.niscamke.backend.service.GeminiIntegrationService.GeminiAnalysis;
 import com.niscamke.backend.model.DecisionLog;
 import com.niscamke.backend.model.FalsePositiveReport;
 import com.niscamke.backend.model.ScamRegistry;
@@ -28,7 +27,7 @@ import com.niscamke.backend.repository.DecisionLogRepository;
 import com.niscamke.backend.repository.FalsePositiveReportRepository;
 import com.niscamke.backend.repository.ScamRegistryRepository;
 import com.niscamke.backend.repository.UserReportRepository;
-import com.niscamke.backend.service.GeminiIntegrationService.GeminiAnalysisResult;
+import com.niscamke.backend.service.GeminiIntegrationService.GeminiAnalysis;
 import com.niscamke.backend.service.UrlFeatureExtractorService.UrlRiskAssessment;
 
 import lombok.RequiredArgsConstructor;
@@ -40,7 +39,8 @@ import lombok.extern.slf4j.Slf4j;
 public class VerificationService {
 
     private static final int BLOCK_THRESHOLD = 80;
-    private static final int WARN_THRESHOLD = 45;
+    private static final int WARN_THRESHOLD = 50;
+    private static final int SCAN_TTL_SECONDS = 300;
 
     private final ScamRegistryRepository scamRegistryRepository;
     private final DecisionLogRepository decisionLogRepository;
@@ -52,91 +52,76 @@ public class VerificationService {
 
     @Cacheable(value = "domainVerifications", key = "#request.currentUrl + ':' + #request.pageText")
     public VerificationResponse checkLink(VerificationRequest request) {
-        String domain = extractDomainName(request.getCurrentUrl());
-        if (domain.isBlank()) {
-            return new VerificationResponse("ALLOW", "Unable to verify malformed URL");
-        }
-
-        return scamRegistryRepository.findByDomainName(domain)
-                .map(entry -> new VerificationResponse(
-                        "BLOCK",
-                        "Known scam domain in community database"))
-                .orElseGet(() -> analyzeUnknownDomain(domain, request.getPageText()));
-    }
-
-    private VerificationResponse analyzeUnknownDomain(String domain, String pageText) {
-        int structuralRisk = geminiIntegrationService.assessStructuralRisk(domain, pageText);
-        boolean isScam = geminiIntegrationService.analyzeWithGemini(domain, pageText);
-
-        if (isScam) {
-            // Only auto-save when the structural checks and AI decision agree.
-            if (structuralRisk >= 40) {
-                saveToRegistry(domain);
-            }
-
-            return new VerificationResponse(
-                    "BLOCK",
-                    "AI analysis indicates this domain may be a scam. Please proceed with caution.");
-        }
-
-        return new VerificationResponse("ALLOW", "No scam indicators detected for this domain.");
+        ScanRequest scanRequest = new ScanRequest(
+                request == null ? "" : request.getCurrentUrl(),
+                request == null ? "" : request.getPageText(),
+                null,
+                "en");
+        ScanResponse scanResponse = scanUrl(scanRequest);
+        String reason = scanResponse.getReasons() == null || scanResponse.getReasons().isEmpty()
+                ? "Scan completed."
+                : scanResponse.getReasons().get(0);
+        return new VerificationResponse(scanResponse.getDecision(), reason);
     }
 
     public ScanResponse scanUrl(ScanRequest request) {
-        String normalizedUrl = request.getUrl() == null ? "" : request.getUrl().trim();
-        String domain = extractDomainName(normalizedUrl);
+        String normalizedUrl = request == null || request.getUrl() == null ? "" : request.getUrl().trim();
+        String pageText = request == null ? "" : request.getPageText();
+        String targetLanguage = request == null ? "en" : request.getTargetLanguage();
+
+        UrlRiskAssessment structuralAssessment = urlFeatureExtractorService.assess(normalizedUrl, pageText);
+        String domain = structuralAssessment.domain();
         if (domain.isBlank()) {
-            DecisionLog invalid = DecisionLog.builder()
-                    .url(normalizedUrl.isBlank() ? "unknown" : normalizedUrl)
-                    .domainName("unknown")
-                    .decision("WARN")
-                    .riskScore(50)
-                    .confidence(0.4)
-                    .reason("Malformed URL. Unable to verify safely.")
-                    .evidenceSources("INPUT_VALIDATION")
-                    .build();
-            decisionLogRepository.save(invalid);
-            return mapLogToScanResponse(invalid, "WARN", List.of("Malformed URL. Unable to verify safely."), 300);
+            DecisionLog invalid = saveDecision(
+                    normalizedUrl.isBlank() ? "unknown" : normalizedUrl,
+                    "unknown",
+                    "WARN",
+                    50,
+                    0.40,
+                    "Malformed URL. Unable to verify safely.",
+                    "INPUT_VALIDATION",
+                    "UNKNOWN",
+                    "The URL could not be parsed safely.",
+                    Map.of("inputValidation", 50));
+            return mapLogToScanResponse(
+                    invalid,
+                    List.of("Malformed URL. Unable to verify safely."),
+                    SCAN_TTL_SECONDS);
         }
 
-        int structuralRisk = geminiIntegrationService.assessStructuralRisk(domain, request.getPageText());
-        boolean knownScam = scamRegistryRepository.findByDomainName(domain).isPresent();
-        boolean aiScam = knownScam || geminiIntegrationService.analyzeWithGemini(domain, request.getPageText());
+        Optional<ScamRegistry> knownScamEntry = scamRegistryRepository.findByDomainName(domain);
+        boolean knownScam = knownScamEntry.isPresent();
+        GeminiAnalysis geminiAnalysis = knownScam
+                ? new GeminiAnalysis(true, List.of("Known scam domain from community intelligence."))
+                : geminiIntegrationService.analyzeWithGeminiDetails(domain, pageText, targetLanguage);
 
-        int riskScore = knownScam ? 95 : structuralRisk;
-        if (!knownScam && aiScam) {
-            riskScore = Math.max(70, structuralRisk);
-        }
-        if (!aiScam && structuralRisk == 0) {
-            riskScore = 10;
-        }
+        int riskScore = calculateRiskScore(structuralAssessment.score(), knownScam, geminiAnalysis.scam());
+        String decision = decisionForRisk(riskScore);
+        double confidence = confidenceForDecision(decision, knownScam, geminiAnalysis.scam());
+        String threatType = knownScam
+                ? normalizeThreatType(knownScamEntry.get().getScamType())
+                : normalizeThreatType(structuralAssessment.threatType());
+        String reason = primaryReason(knownScam, geminiAnalysis, structuralAssessment, decision);
+        String evidenceSources = evidenceSources(knownScam, geminiIntegrationService.isConfigured(), structuralAssessment.score());
+        List<String> reasons = mergeReasons(reason, structuralAssessment.indicators(), geminiAnalysis.reasons());
 
-        String decision = riskScore >= 80 ? "BLOCK" : (riskScore >= 50 ? "WARN" : "ALLOW");
-        double confidence = riskScore >= 80 ? 0.95 : (riskScore >= 50 ? 0.75 : 0.92);
-
-        String reason = knownScam
-                ? "Known scam domain from community intelligence."
-                : aiScam
-                ? "AI phishing analysis flagged suspicious signals."
-                : "No significant phishing indicators detected.";
-
-        String evidenceSources = knownScam ? "COMMUNITY_DB,RULE_ENGINE" : aiScam ? "AI_MODEL,RULE_ENGINE" : "RULE_ENGINE";
-        DecisionLog decisionLog = DecisionLog.builder()
-                .url(normalizedUrl)
-                .domainName(domain)
-                .decision(decision)
-                .riskScore(riskScore)
-                .confidence(confidence)
-                .reason(reason)
-                .evidenceSources(evidenceSources)
-                .build();
-        decisionLogRepository.save(decisionLog);
+        DecisionLog decisionLog = saveDecision(
+                structuralAssessment.normalizedUrl(),
+                domain,
+                decision,
+                riskScore,
+                confidence,
+                reason,
+                evidenceSources,
+                threatType,
+                aiExplanationFrom(reasons),
+                structuralAssessment.scoreBreakdown());
 
         if ("BLOCK".equals(decision) && !knownScam) {
-            saveToRegistry(domain);
+            saveToRegistry(domain, threatType, reason);
         }
 
-        return mapLogToScanResponse(decisionLog, decision, List.of(reason), 300);
+        return mapLogToScanResponse(decisionLog, reasons, SCAN_TTL_SECONDS);
     }
 
     public Optional<DecisionLog> findDecisionByPublicId(String decisionId) {
@@ -249,30 +234,6 @@ public class VerificationService {
         return decisionLogRepository.findTop10ByOrderByCreatedAtDesc();
     }
 
-    private void saveToRegistry(String domain, String scamType, String description) {
-        scamRegistryRepository.findByDomainName(domain).ifPresentOrElse(
-                existing -> {
-                    existing.setScamType(normalizeThreatType(scamType));
-                    existing.setThreatLevel("HIGH");
-                    existing.setDescription(description);
-                    existing.setFlaggedAt(LocalDateTime.now());
-                    scamRegistryRepository.save(existing);
-                },
-                () -> {
-                    LocalDateTime now = LocalDateTime.now();
-                    ScamRegistry scamRegistry = ScamRegistry.builder()
-                            .domainName(domain)
-                            .scamType(normalizeThreatType(scamType))
-                            .threatLevel("HIGH")
-                            .description(description)
-                            .flaggedAt(now)
-                            .reportedBy("SYSTEM")
-                            .reportedAt(now)
-                            .build();
-                    scamRegistryRepository.save(scamRegistry);
-                });
-    }
-
     public void submitCommunityReport(ReportRequest request) {
         if (request == null) {
             log.warn("Ignoring null community report request.");
@@ -307,7 +268,7 @@ public class VerificationService {
         registryEntry.setThreatLevel("HIGH");
         registryEntry.setDescription(description);
         registryEntry.setFlaggedAt(now);
-        registryEntry.setReportedBy(firstNonBlank(request.getReporterEmail(), "COMMUNITY"));
+        registryEntry.setReportedBy(reporterEmail);
         registryEntry.setReportedAt(now);
         scamRegistryRepository.save(registryEntry);
 
@@ -322,6 +283,117 @@ public class VerificationService {
                 scamType,
                 "Community intelligence strengthened the risk signal for this domain.",
                 Map.of("communityReport", 65));
+    }
+
+    private int calculateRiskScore(int structuralRisk, boolean knownScam, boolean analysisScam) {
+        if (knownScam) {
+            return 95;
+        }
+        if (analysisScam) {
+            return Math.max(BLOCK_THRESHOLD, structuralRisk);
+        }
+        return structuralRisk == 0 ? 10 : structuralRisk;
+    }
+
+    private String decisionForRisk(int riskScore) {
+        if (riskScore >= BLOCK_THRESHOLD) {
+            return "BLOCK";
+        }
+        if (riskScore >= WARN_THRESHOLD) {
+            return "WARN";
+        }
+        return "ALLOW";
+    }
+
+    private double confidenceForDecision(String decision, boolean knownScam, boolean analysisScam) {
+        if (knownScam) {
+            return 0.97;
+        }
+        if (analysisScam) {
+            return 0.88;
+        }
+        return switch (decision) {
+            case "BLOCK" -> 0.86;
+            case "WARN" -> 0.74;
+            default -> 0.92;
+        };
+    }
+
+    private String primaryReason(
+            boolean knownScam,
+            GeminiAnalysis geminiAnalysis,
+            UrlRiskAssessment structuralAssessment,
+            String decision) {
+        if (knownScam) {
+            return "Known scam domain from community intelligence.";
+        }
+        if (geminiAnalysis.reasons() != null && !geminiAnalysis.reasons().isEmpty()) {
+            return geminiAnalysis.reasons().get(0);
+        }
+        if ("ALLOW".equals(decision)) {
+            return "No significant phishing indicators detected.";
+        }
+        return structuralAssessment.indicators().isEmpty()
+                ? "Suspicious scam indicators were detected."
+                : structuralAssessment.indicators().get(0);
+    }
+
+    private String evidenceSources(boolean knownScam, boolean geminiConfigured, int structuralRisk) {
+        if (knownScam) {
+            return "COMMUNITY_DB,RULE_ENGINE";
+        }
+        if (geminiConfigured) {
+            return structuralRisk > 0 ? "AI_MODEL,RULE_ENGINE" : "AI_MODEL";
+        }
+        return structuralRisk > 0 ? "RULE_ENGINE" : "RULE_ENGINE";
+    }
+
+    private List<String> mergeReasons(String primary, List<String> structuralIndicators, List<String> geminiReasons) {
+        LinkedHashSet<String> merged = new LinkedHashSet<>();
+        if (primary != null && !primary.isBlank()) {
+            merged.add(primary);
+        }
+        if (geminiReasons != null) {
+            geminiReasons.stream()
+                    .filter(reason -> reason != null && !reason.isBlank())
+                    .limit(3)
+                    .forEach(merged::add);
+        }
+        if (structuralIndicators != null) {
+            structuralIndicators.stream()
+                    .filter(reason -> reason != null && !reason.isBlank())
+                    .limit(4)
+                    .forEach(merged::add);
+        }
+        return new ArrayList<>(merged);
+    }
+
+    private String aiExplanationFrom(List<String> reasons) {
+        return reasons == null || reasons.isEmpty() ? "No AI explanation was recorded." : reasons.get(0);
+    }
+
+    private void saveToRegistry(String domain, String scamType, String description) {
+        scamRegistryRepository.findByDomainName(domain).ifPresentOrElse(
+                existing -> {
+                    existing.setScamType(normalizeThreatType(scamType));
+                    existing.setThreatLevel("HIGH");
+                    existing.setDescription(description);
+                    existing.setFlaggedAt(LocalDateTime.now());
+                    scamRegistryRepository.save(existing);
+                },
+                () -> {
+                    LocalDateTime now = LocalDateTime.now();
+                    ScamRegistry scamRegistry = ScamRegistry.builder()
+                            .domainName(domain)
+                            .scamType(normalizeThreatType(scamType))
+                            .threatLevel("HIGH")
+                            .description(description)
+                            .flaggedAt(now)
+                            .reportedBy("SYSTEM")
+                            .reportedAt(now)
+                            .build();
+                    scamRegistryRepository.save(scamRegistry);
+                });
     }
 
     private DecisionLog saveDecision(
@@ -353,7 +425,7 @@ public class VerificationService {
     private ScanResponse mapLogToScanResponse(DecisionLog log, List<String> reasons, int ttlSeconds) {
         return new ScanResponse(
                 log.getPublicId(),
-                decision,
+                log.getDecision(),
                 log.getRiskScore(),
                 log.getConfidence(),
                 reasons,
@@ -362,38 +434,6 @@ public class VerificationService {
                 log.getThreatType(),
                 log.getAiExplanation(),
                 log.getScoreBreakdown());
-    }
-
-    private List<String> mergeTrustedReasons(List<String> geminiReasons) {
-        if (geminiReasons == null || geminiReasons.isEmpty()) {
-            return List.of("Trusted official domain. Stay alert and verify the URL before entering sensitive details.");
-        }
-
-        java.util.ArrayList<String> reasons = new java.util.ArrayList<>();
-        reasons.add("Trusted official domain. Stay alert and verify the URL before entering sensitive details.");
-        reasons.addAll(geminiReasons);
-        return reasons;
-    }
-
-    private List<String> withPrimaryReason(String reason, List<String> indicators) {
-        List<String> reasons = new ArrayList<>();
-        reasons.add(reason);
-        indicators.stream()
-                .filter(indicator -> indicator != null && !indicator.isBlank())
-                .limit(4)
-                .forEach(reasons::add);
-        return reasons;
-    }
-
-    private List<String> combineIndicators(List<String> structuralIndicators, List<String> aiIndicators) {
-        List<String> combined = new ArrayList<>();
-        if (structuralIndicators != null) {
-            combined.addAll(structuralIndicators);
-        }
-        if (aiIndicators != null) {
-            combined.addAll(aiIndicators);
-        }
-        return combined;
     }
 
     private String toJson(Map<String, Integer> scoreBreakdown) {
@@ -425,30 +465,5 @@ public class VerificationService {
 
     private String trimToEmpty(String value) {
         return value == null ? "" : value.trim();
-    }
-
-    private record ScanDecision(
-            String decision,
-            int riskScore,
-            double confidence,
-            String reason,
-            List<String> reasons,
-            String evidenceSources,
-            String threatType,
-            String aiExplanation,
-            int ttlSeconds) {
-    }
-
-    private boolean isTrustedDomain(String domain) {
-        if (domain == null || domain.isBlank()) {
-            return false;
-        }
-
-        String normalizedDomain = domain.toLowerCase(Locale.ROOT);
-        return TRUSTED_DOMAINS.stream()
-                .anyMatch(trustedDomain -> normalizedDomain.equals(trustedDomain)
-                        || normalizedDomain.endsWith("." + trustedDomain))
-                || normalizedDomain.endsWith(".gov.my")
-                || normalizedDomain.endsWith(".edu.my");
     }
 }

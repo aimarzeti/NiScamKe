@@ -39,6 +39,7 @@ public class LinkVerificationController {
 
     private final VerificationService verificationService;
     private final com.niscamke.backend.service.GeminiIntegrationService geminiIntegrationService;
+    private final ThreatAnalyticsService threatAnalyticsService;
 
     // endpoint for verifying links, accepts a POST request with the current URL and page text, returns a response with the verification status and reason
     @PostMapping("/verify-link") // endpoint for verifying links
@@ -182,6 +183,7 @@ public class LinkVerificationController {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class ScanResponse {
+        private String decisionId;
         private String decision;
         private Integer riskScore;
         private Double confidence;
