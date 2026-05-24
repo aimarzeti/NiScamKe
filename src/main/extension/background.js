@@ -1,13 +1,21 @@
 /**
  * Ni Scam Ke? - Background Service Worker
- * Uses the live backend first, then falls back to local rules so the demo never feels broken.
+ * Uses the live backend first, then falls back to local rules when the service is unavailable.
  */
 
 const API_BASE_URL = "http://localhost:8080";
 const LIVE_BACKEND_ENABLED = true;
 const LIVE_SCAMSHIELD_SCAN_ROUTE = `${API_BASE_URL}/api/v1/scan-url`;
+const BADGE_COLORS = {
+    ALLOW: "#11845b",
+    WARN: "#b86b00",
+    BLOCK: "#c1281f",
+    USER_BYPASS: "#b86b00"
+};
 const BACKEND_SCAN_RETRY_COUNT = 2;
 const BACKEND_SCAN_RETRY_DELAY_MS = 500;
+const RECENT_PREFLIGHT_REDIRECT_TTL_MS = 3000;
+const recentPreflightRedirects = new Map();
 
 const TRUSTED_DOMAINS = [
     "maybank2u.com.my",
@@ -237,11 +245,195 @@ function normalizeVerdictPayload(rawVerdict, scannedUrl, options = {}) {
     };
 }
 
-function persistLastScan(verdict) {
-    chrome.storage.local.set({
-        scamStatus: verdict.status,
-        scamType: verdict.reason,
-        lastScan: verdict
+function buildBlockedPageUrl(verdict, blockedUrl) {
+    const params = new URLSearchParams();
+    params.set("blocked", blockedUrl);
+
+    if (verdict.reason) {
+        params.set("reason", verdict.reason);
+    }
+
+    if (typeof verdict.riskScore === "number") {
+        params.set("riskScore", String(verdict.riskScore));
+    }
+
+    if (typeof verdict.confidence === "number") {
+        params.set("confidence", String(verdict.confidence));
+    }
+
+    if (verdict.decisionId) {
+        params.set("decisionId", verdict.decisionId);
+    }
+
+    if (Array.isArray(verdict.reasons) && verdict.reasons.length > 0) {
+        params.set("reasons", JSON.stringify(verdict.reasons.slice(0, 5)));
+    }
+
+    if (verdict.evidenceSources) {
+        params.set("sources", verdict.evidenceSources);
+    }
+
+    return `${chrome.runtime.getURL("blocked.html")}?${params.toString()}`;
+}
+
+function getBadgeText(verdict) {
+    if (!verdict) {
+        return "";
+    }
+
+    if (verdict.scanMode === "USER_BYPASS") {
+        return "!";
+    }
+
+    if (verdict.status === "ALLOW") {
+        return "OK";
+    }
+
+    if (verdict.status === "WARN") {
+        return "!";
+    }
+
+    if (verdict.status === "BLOCK") {
+        return "STOP";
+    }
+
+    return "";
+}
+
+function updateProtectionBadge(verdict, tabId) {
+    if (!tabId || !chrome.action) {
+        return;
+    }
+
+    const badgeText = getBadgeText(verdict);
+    chrome.action.setBadgeText({ tabId, text: badgeText });
+
+    if (badgeText) {
+        const badgeColor = BADGE_COLORS[verdict.scanMode === "USER_BYPASS" ? "USER_BYPASS" : verdict.status] || "#637186";
+        chrome.action.setBadgeBackgroundColor({ tabId, color: badgeColor });
+    }
+
+    const title = verdict
+        ? `Ni Scam Ke? ${verdict.status} - Risk ${verdict.riskScore}/100`
+        : "Ni Scam Ke?";
+    chrome.action.setTitle({ tabId, title });
+}
+
+function persistLastScan(verdict, sender) {
+    const tabId = sender && sender.tab && sender.tab.id;
+
+    chrome.storage.local.get(["scanByTab"], data => {
+        const scanByTab = data.scanByTab || {};
+        const stampedVerdict = {
+            ...verdict,
+            sourceTabId: tabId || null
+        };
+
+        if (tabId) {
+            scanByTab[String(tabId)] = stampedVerdict;
+            updateProtectionBadge(stampedVerdict, tabId);
+        }
+
+        chrome.storage.local.set({
+            scamStatus: verdict.status,
+            scamType: verdict.reason,
+            lastScan: stampedVerdict,
+            scanByTab
+        });
+    });
+}
+
+function shouldSkipPreflightNavigation(details) {
+    if (!details || details.frameId !== 0 || details.tabId < 0 || !details.url) {
+        return true;
+    }
+
+    if (!details.url.startsWith("http://") && !details.url.startsWith("https://")) {
+        return true;
+    }
+
+    if (details.url.startsWith(API_BASE_URL)) {
+        return true;
+    }
+
+    const lastRedirectAt = recentPreflightRedirects.get(details.url);
+    if (lastRedirectAt && Date.now() - lastRedirectAt < RECENT_PREFLIGHT_REDIRECT_TTL_MS) {
+        return true;
+    }
+
+    return false;
+}
+
+function createPreflightVerdict(details) {
+    const localVerdict = evaluateWithLocalRules({
+        currentUrl: details.url,
+        pageText: details.url
+    });
+
+    if (localVerdict.status !== "BLOCK") {
+        return localVerdict;
+    }
+
+    const reasons = [
+        "Top-level navigation was checked before the page loaded.",
+        ...localVerdict.reasons
+    ];
+
+    return {
+        ...localVerdict,
+        reason: reasons[0],
+        reasons,
+        evidenceSources: `${localVerdict.evidenceSources},NAVIGATION_PREFLIGHT`,
+        scanMode: "NAVIGATION_PREFLIGHT",
+        backendAvailable: false
+    };
+}
+
+function blockPreflightNavigation(details, verdict) {
+    recentPreflightRedirects.set(details.url, Date.now());
+    persistLastScan(verdict, { tab: { id: details.tabId } });
+    pushBrowserNotification(verdict, true);
+
+    chrome.tabs.update(details.tabId, {
+        url: buildBlockedPageUrl(verdict, details.url)
+    }, () => {
+        const ignoredLastError = chrome.runtime.lastError;
+    });
+
+    if (LIVE_BACKEND_ENABLED) {
+        evaluateViaBackend({
+            currentUrl: details.url,
+            pageText: details.url
+        })
+            .then(backendVerdict => {
+                persistLastScan({
+                    ...backendVerdict,
+                    reason: verdict.reason,
+                    reasons: verdict.reasons,
+                    scanMode: "NAVIGATION_PREFLIGHT_BACKEND"
+                }, { tab: { id: details.tabId } });
+            })
+            .catch(() => {
+                // Local preflight already protected the user; backend evidence is best-effort.
+            });
+    }
+}
+
+if (chrome.webNavigation && chrome.webNavigation.onBeforeNavigate) {
+    chrome.webNavigation.onBeforeNavigate.addListener(details => {
+        if (shouldSkipPreflightNavigation(details)) {
+            return;
+        }
+
+        const verdict = createPreflightVerdict(details);
+        if (verdict.status === "BLOCK") {
+            blockPreflightNavigation(details, verdict);
+        } else if (verdict.status === "WARN") {
+            persistLastScan({
+                ...verdict,
+                scanMode: "NAVIGATION_PREFLIGHT"
+            }, { tab: { id: details.tabId } });
+        }
     });
 }
 
@@ -337,20 +529,16 @@ function evaluateWithLocalRules(incomingMessage) {
     const hasApplicationScamBait = APPLICATION_SCAM_BAIT_TERMS.some(term =>
         normalizedUrl.includes(term) || pageText.includes(term)
     );
-    const applicationBaitCount = APPLICATION_SCAM_BAIT_TERMS.filter(term =>
-        normalizedUrl.includes(term) || pageText.includes(term)
-    ).length;
     const collectsPersonalContact = PERSONAL_CONTACT_TERMS.some(term => pageText.includes(term));
-    const hasSuspiciousApplicationHost = SUSPICIOUS_APPLICATION_HOST_TERMS.some(term => host.includes(term));
 
-    if (targetsBank && matchedPattern) {
+    if (highConfidenceBankMimic) {
         return normalizeVerdictPayload({
             status: "BLOCK",
             riskScore: 96,
             confidence: 0.94,
             reasons: [
-                "This looks like a Malaysian banking lookalike domain.",
-                `Matched suspicious token: ${matchedPattern}`
+                "This looks like a Malaysian banking lookalike domain on an untrusted address.",
+                matchedPattern ? `Matched suspicious token: ${matchedPattern}` : "Banking wording appears with high-risk URL or credential signals."
             ],
             evidenceSources: "LOCAL_BANK_MIMIC_RULES"
         }, targetUrl, { scanMode: "LOCAL_RULES", backendAvailable: false });
@@ -364,32 +552,6 @@ function evaluateWithLocalRules(incomingMessage) {
             reasons: [
                 "This looks like a free-aid or free-device application scam.",
                 "The page combines typo-filled application text with Telegram or personal-detail collection."
-            ],
-            evidenceSources: "LOCAL_APPLICATION_SCAM_RULES"
-        }, targetUrl, { scanMode: "LOCAL_RULES", backendAvailable: false });
-    }
-
-    if (applicationBaitCount >= 2 && hasSuspiciousApplicationHost) {
-        return normalizeVerdictPayload({
-            status: "BLOCK",
-            riskScore: 90,
-            confidence: 0.88,
-            reasons: [
-                "Why is this flagged: The untrusted domain combines public-aid or free-device bait with suspicious application wording or typo-like host text.",
-                "Modus operandi: The page appears to lure users into a fake application flow before collecting contact details, identity information, OTPs, or payment details."
-            ],
-            evidenceSources: "LOCAL_APPLICATION_SCAM_RULES"
-        }, targetUrl, { scanMode: "LOCAL_RULES", backendAvailable: false });
-    }
-
-    if (applicationBaitCount >= 3 && !establishedMalaysianTld) {
-        return normalizeVerdictPayload({
-            status: "BLOCK",
-            riskScore: 85,
-            confidence: 0.84,
-            reasons: [
-                "Why is this flagged: The URL uses multiple free-aid or free-device bait terms on an untrusted non-Malaysian domain.",
-                "Modus operandi: Scammers use this pattern to make a fake giveaway or assistance application look urgent and legitimate."
             ],
             evidenceSources: "LOCAL_APPLICATION_SCAM_RULES"
         }, targetUrl, { scanMode: "LOCAL_RULES", backendAvailable: false });
@@ -451,13 +613,23 @@ function evaluateWithLocalRules(incomingMessage) {
         }, targetUrl, { scanMode: "LOCAL_RULES", backendAvailable: false });
     }
 
-    if (targetsBank || (matchedPattern && highRiskTld)) {
+    if (matchedPattern && highRiskTld) {
         return normalizeVerdictPayload({
             status: "BLOCK",
             riskScore: 88,
             confidence: 0.88,
-            reasons: ["Banking keywords or login language appear on an untrusted domain."],
+            reasons: ["Login or verification language appears on a high-risk domain."],
             evidenceSources: "LOCAL_RISK_RULES"
+        }, targetUrl, { scanMode: "LOCAL_RULES", backendAvailable: false });
+    }
+
+    if (targetsBank) {
+        return normalizeVerdictPayload({
+            status: "WARN",
+            riskScore: 58,
+            confidence: 0.72,
+            reasons: ["This appears bank-related but is not in the trusted list yet. Verify before entering sensitive details."],
+            evidenceSources: "LOCAL_REVIEW_REQUIRED"
         }, targetUrl, { scanMode: "LOCAL_RULES", backendAvailable: false });
     }
 
@@ -505,23 +677,6 @@ function evaluateViaBackend(incomingMessage) {
         }));
 }
 
-async function evaluateViaBackendWithRetry(incomingMessage) {
-    let lastError = null;
-
-    for (let attempt = 0; attempt <= BACKEND_SCAN_RETRY_COUNT; attempt += 1) {
-        try {
-            return await evaluateViaBackend(incomingMessage);
-        } catch (error) {
-            lastError = error;
-            if (attempt < BACKEND_SCAN_RETRY_COUNT) {
-                await delay(BACKEND_SCAN_RETRY_DELAY_MS);
-            }
-        }
-    }
-
-    throw lastError;
-}
-
 chrome.runtime.onMessage.addListener((incomingMessage, sender, dispatchVerdictCallback) => {
     if (incomingMessage.action !== "evaluateNetworkTarget") {
         return false;
@@ -538,9 +693,10 @@ chrome.runtime.onMessage.addListener((incomingMessage, sender, dispatchVerdictCa
     });
 
     verdictPromise
+        .then(verdict => applyClientSideContext(verdict, incomingMessage))
         .then(verdict => {
-            persistLastScan(verdict);
-            pushBrowserNotification(verdict);
+            persistLastScan(verdict, sender);
+            pushBrowserNotification(verdict, incomingMessage.forceNotification === true);
             dispatchVerdictCallback(verdict);
         })
         .catch(error => {
@@ -551,7 +707,6 @@ chrome.runtime.onMessage.addListener((incomingMessage, sender, dispatchVerdictCa
             safeFallbackVerdict.scanMode = "LOCAL_RULES";
 
             persistLastScan(safeFallbackVerdict);
-            pushBrowserNotification(safeFallbackVerdict);
             dispatchVerdictCallback(safeFallbackVerdict);
         });
 

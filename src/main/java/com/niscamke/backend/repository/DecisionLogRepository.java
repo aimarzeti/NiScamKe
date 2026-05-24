@@ -11,4 +11,5 @@ public interface DecisionLogRepository extends JpaRepository<DecisionLog, Long> 
     Optional<DecisionLog> findByPublicId(String publicId);
     long countByDecision(String decision);
     List<DecisionLog> findTop10ByOrderByCreatedAtDesc();
+    List<DecisionLog> findTop10ByDecisionOrderByCreatedAtDesc(String decision);
 }

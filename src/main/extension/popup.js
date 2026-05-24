@@ -87,14 +87,7 @@ function renderPopup(scan) {
     const displayStatus = scan?.scanMode === "USER_BYPASS" ? "USER_BYPASS" : status;
     const copy = UI_COPY.states[displayStatus] || UI_COPY.states.WAITING;
     const riskScore = Number.isFinite(Number(scan?.riskScore)) ? Number(scan.riskScore) : 0;
-    const reason = scan?.reason || UI_COPY.reasonFallback;
-    const findings = Array.isArray(scan?.reasons)
-        ? scan.reasons.filter(Boolean).slice(0, 3)
-        : [];
-
-    if (currentRender !== renderSequence) {
-        return;
-    }
+    const reason = scan?.reason || "No scan result yet. Click scan to refresh the current page.";
 
     setCardState(displayStatus);
 
@@ -141,8 +134,16 @@ function renderPopup(scan) {
 }
 
 function refreshPopupState() {
-    chrome.storage.local.get(["lastScan"], data => {
-        renderPopup(data.lastScan);
+    chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
+        const activeTab = tabs && tabs.length > 0 ? tabs[0] : null;
+
+        chrome.storage.local.get(["lastScan", "scanByTab"], data => {
+            const tabScan = activeTab && activeTab.id && data.scanByTab
+                ? data.scanByTab[String(activeTab.id)]
+                : null;
+
+            renderPopup(tabScan || data.lastScan);
+        });
     });
 }
 
@@ -151,14 +152,14 @@ function bindScanButton() {
 
     button.addEventListener("click", () => {
         const originalText = button.textContent;
-        button.textContent = UI_COPY.scanButtonLoading;
+        button.textContent = "Scanning current tab...";
         button.disabled = true;
         renderPopup({
             status: "SCANNING",
             riskScore: 50,
             confidence: 0.5,
             domain: "Refreshing",
-            reason: UI_COPY.refreshingReason,
+            reason: "Refreshing the tab so the content scanner can evaluate the latest page.",
             scanMode: "SCANNING",
             backendAvailable: true
         });
@@ -166,7 +167,15 @@ function bindScanButton() {
 
         chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
             if (tabs && tabs.length > 0 && tabs[0].id) {
-                chrome.tabs.reload(tabs[0].id);
+                chrome.tabs.sendMessage(tabs[0].id, { action: "scanCurrentPageNow" }, () => {
+                    const ignoredLastError = chrome.runtime.lastError;
+                    setTimeout(() => {
+                        button.textContent = originalText;
+                        button.disabled = false;
+                        refreshPopupState();
+                    }, 500);
+                });
+                return;
             }
 
             [900, 1800, 3200].forEach(delay => {

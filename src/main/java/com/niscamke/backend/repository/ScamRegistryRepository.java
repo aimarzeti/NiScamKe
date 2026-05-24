@@ -9,4 +9,5 @@ import com.niscamke.backend.model.ScamRegistry;
 
 public interface ScamRegistryRepository extends JpaRepository<ScamRegistry, Long> {
     Optional<ScamRegistry> findByDomainName(String domainName);
+    long countByThreatLevel(String threatLevel);
 }

@@ -8,10 +8,12 @@
     "activeTab",
     "tabs",
     "storage",
-    "notifications"
+    "notifications",
+    "webNavigation"
   ],
   "host_permissions": [
-    "http://localhost:8080/*"
+    "http://*/*",
+    "https://*/*"
   ],
   "icons": {
     "16": "icon-16.png",

@@ -56,6 +56,15 @@ public class DecisionLog {
     @Column(name = "evidence_sources", nullable = false, length = 255)
     private String evidenceSources;
 
+    @Column(name = "threat_type", length = 64)
+    private String threatType;
+
+    @Column(name = "ai_explanation", length = 1200)
+    private String aiExplanation;
+
+    @Column(name = "score_breakdown", length = 4000)
+    private String scoreBreakdown;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

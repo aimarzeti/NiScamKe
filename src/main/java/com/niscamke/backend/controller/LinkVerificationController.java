@@ -17,6 +17,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.niscamke.backend.model.DecisionLog;
 import com.niscamke.backend.model.FalsePositiveReport;
+import com.niscamke.backend.service.ThreatAnalyticsService;
+import com.niscamke.backend.service.ThreatAnalyticsService.DailyTrendPoint;
+import com.niscamke.backend.service.ThreatAnalyticsService.DashboardStatsResponse;
+import com.niscamke.backend.service.ThreatAnalyticsService.DetailedHealthResponse;
+import com.niscamke.backend.service.ThreatAnalyticsService.ThreatFeedItem;
+import com.niscamke.backend.service.ThreatAnalyticsService.ThreatTypeStat;
 import com.niscamke.backend.service.VerificationService;
 import com.niscamke.backend.service.VerificationService.SummaryResponse;
 
@@ -25,7 +31,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 
-@CrossOrigin
+@CrossOrigin(originPatterns = {"http://localhost:*", "https://localhost:*", "chrome-extension://*"})
 @RestController
 @RequestMapping("/api/v1")
 @RequiredArgsConstructor
@@ -132,6 +138,26 @@ public class LinkVerificationController {
         return ResponseEntity.ok(responses);
     }
 
+    @GetMapping("/stats/dashboard")
+    public ResponseEntity<DashboardStatsResponse> getDashboardStats() {
+        return ResponseEntity.ok(threatAnalyticsService.getDashboardStats());
+    }
+
+    @GetMapping("/stats/threats")
+    public ResponseEntity<java.util.List<ThreatFeedItem>> getRecentThreats() {
+        return ResponseEntity.ok(threatAnalyticsService.getRecentThreats());
+    }
+
+    @GetMapping("/stats/trends")
+    public ResponseEntity<java.util.List<DailyTrendPoint>> getThreatTrends() {
+        return ResponseEntity.ok(threatAnalyticsService.getSevenDayTrends());
+    }
+
+    @GetMapping("/stats/threat-types")
+    public ResponseEntity<java.util.List<ThreatTypeStat>> getThreatTypes() {
+        return ResponseEntity.ok(threatAnalyticsService.getThreatTypeBreakdown());
+    }
+
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
@@ -162,6 +188,9 @@ public class LinkVerificationController {
         private java.util.List<String> reasons;
         private String evidenceSources;
         private Integer ttlSeconds;
+        private String threatType;
+        private String aiExplanation;
+        private String scoreBreakdown;
     }
 
     @Data
@@ -184,6 +213,9 @@ public class LinkVerificationController {
         private Double confidence;
         private String reason;
         private String evidenceSources;
+        private String threatType;
+        private String aiExplanation;
+        private String scoreBreakdown;
         private String createdAt;
     }
 
@@ -246,6 +278,9 @@ public class LinkVerificationController {
                 log.getConfidence(),
                 log.getReason(),
                 log.getEvidenceSources(),
+                log.getThreatType(),
+                log.getAiExplanation(),
+                log.getScoreBreakdown(),
                 log.getCreatedAt().toString());
     }
 
@@ -266,5 +301,10 @@ public class LinkVerificationController {
     @GetMapping("/health")
     public ResponseEntity<String> health() {
         return ResponseEntity.ok("NiScamKe Backend v1.0 - Protecting Malaysians");
+    }
+
+    @GetMapping("/health/detailed")
+    public ResponseEntity<DetailedHealthResponse> detailedHealth() {
+        return ResponseEntity.ok(threatAnalyticsService.getDetailedHealth());
     }
 }

@@ -26,6 +26,15 @@ function formatPercent(value) {
     return `${Math.round(numeric * 100)}%`;
 }
 
+async function readErrorMessage(response) {
+    try {
+        const data = await response.json();
+        return data.message || data.error || `Request failed with status ${response.status}.`;
+    } catch (error) {
+        return `Request failed with status ${response.status}.`;
+    }
+}
+
 function formatEvidenceSources(evidenceSources) {
     const sourceLabels = {
         AI_MODEL: "Gemini AI",
@@ -43,6 +52,7 @@ function formatEvidenceSources(evidenceSources) {
         LOCAL_RULE_ENGINE: "local rule engine",
         LOCAL_TRUST_LIST: "local trusted list",
         LOCAL_TYPOSQUATTING_RULES: "local typosquatting rules",
+        NAVIGATION_PREFLIGHT: "navigation preflight",
         BACKEND_FAILSAFE: "backend failsafe",
         TRUSTED_ALLOWLIST: "trusted allowlist"
     };
@@ -80,8 +90,10 @@ document.addEventListener("DOMContentLoaded", () => {
     riskScoreEl.textContent = `${safeRiskScore}/100`;
     confidenceEl.textContent = formatPercent(confidence);
     riskFillEl.style.width = `${safeRiskScore}%`;
-    riskPillEl.textContent = safeRiskScore >= 80 ? "This is a scam!" : safeRiskScore >= 50 ? "Suspicious page" : "Low risk";
-    sourceLineEl.textContent = `Evaluated by: ${formatEvidenceSources(evidenceSources)}`;
+    sourceLineEl.textContent = `Evidence source: ${evidenceSources}`;
+
+    const riskLabel = safeRiskScore >= 80 ? "High Risk" : safeRiskScore >= 50 ? "Medium Risk" : "Low Risk";
+    riskPillEl.textContent = riskLabel;
 
     reasonsListEl.innerHTML = "";
     reasons.forEach(text => {
@@ -160,14 +172,14 @@ document.addEventListener("DOMContentLoaded", () => {
             });
 
             if (!response.ok) {
-                throw new Error(`Request failed with status ${response.status}`);
+                throw new Error(await readErrorMessage(response));
             }
 
             const data = await response.json();
             reportStatus.textContent = data.message || "Thanks. Your review request was submitted.";
             falsePositiveForm.reset();
         } catch (error) {
-            reportStatus.textContent = "Could not submit review right now. Please try again when backend is online.";
+            reportStatus.textContent = `Could not submit review right now. ${error.message}`;
         } finally {
             reportButton.disabled = false;
             reportButton.textContent = "Submit review request";

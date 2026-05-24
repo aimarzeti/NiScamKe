@@ -27,7 +27,7 @@ $results = foreach ($testCase in $testCases) {
 
     Write-Progress `
         -Activity "Ni Scam Ke? 100-case scan test" `
-        -Status "Case $caseNumber/$totalCases: $($testCase.url)" `
+        -Status ("Case {0}/{1}: {2}" -f $caseNumber, $totalCases, $testCase.url) `
         -PercentComplete $percentComplete
 
     Write-Host "[$caseNumber/$totalCases] Testing $($testCase.url)"

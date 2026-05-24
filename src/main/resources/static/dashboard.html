@@ -94,7 +94,7 @@
       line-height: 1.55;
     }
 
-    .demo-card {
+    .summary-card {
       padding: 24px;
       display: flex;
       flex-direction: column;
@@ -104,13 +104,13 @@
       color: #ffffff;
     }
 
-    .demo-card p {
+    .summary-card p {
       margin: 0;
       color: rgba(255, 255, 255, 0.78);
       line-height: 1.5;
     }
 
-    .demo-card strong {
+    .summary-card strong {
       display: block;
       font-size: 42px;
       line-height: 1;
@@ -301,20 +301,21 @@
         <h1>Protecting users before the click becomes a crisis.</h1>
         <p class="lede">
           NiScamKe combines browser intervention, explainable risk scoring, community reports,
-          and moderator review for Malaysian finance scams. This view is built for judges:
-          scan activity, safety decisions, and false-positive handling in one place.
+          and moderator review for Malaysian finance scams. Scan activity, safety decisions,
+          and trust review handling are visible in one operational view.
         </p>
       </div>
 
-      <aside class="panel demo-card">
+      <aside class="panel summary-card">
         <div>
           <p>Current scan volume</p>
           <strong id="totalScans">0</strong>
         </div>
-        <p id="healthLine">Backend is ready on localhost:8080.</p>
+        <p id="healthLine">Protection service is ready.</p>
         <div class="actions">
+          <a class="btn" href="/protection.html">Protection Check</a>
           <a class="btn" href="/review.html">Review Queue</a>
-          <a class="btn secondary" href="/api/v1/health">API Health</a>
+          <a class="btn secondary" href="/api/v1/health">System Status</a>
         </div>
       </aside>
     </section>
@@ -324,9 +325,9 @@
       <div class="metric"><p class="label">Warned</p><div id="warnCount" class="value warn">0</div></div>
       <div class="metric"><p class="label">Blocked</p><div id="blockCount" class="value block">0</div></div>
       <div class="metric"><p class="label">Block Rate</p><div id="blockRate" class="value">0%</div></div>
-      <div class="metric"><p class="label">FP Pending</p><div id="pendingFp" class="value warn">0</div></div>
-      <div class="metric"><p class="label">FP Approved</p><div id="approvedFp" class="value safe">0</div></div>
-      <div class="metric"><p class="label">FP Rejected</p><div id="rejectedFp" class="value block">0</div></div>
+      <div class="metric"><p class="label">Review Pending</p><div id="pendingFp" class="value warn">0</div></div>
+      <div class="metric"><p class="label">Review Approved</p><div id="approvedFp" class="value safe">0</div></div>
+      <div class="metric"><p class="label">Review Rejected</p><div id="rejectedFp" class="value block">0</div></div>
       <div class="metric"><p class="label">Refresh</p><div id="updatedAt" class="value">--</div></div>
     </section>
 
@@ -334,9 +335,9 @@
       <div class="section-head">
         <div>
           <h2>Latest Decisions</h2>
-          <p class="muted">Recent explainable scan results for live demo storytelling.</p>
+          <p class="muted">Recent explainable scan results from browser and partner channels.</p>
         </div>
-        <a class="btn secondary" href="/api/v1/admin/recent-decisions">Raw JSON</a>
+        <a class="btn secondary" href="/api/v1/admin/recent-decisions">Decision Feed</a>
       </div>
       <div id="recentDecisions"></div>
     </section>
@@ -364,7 +365,7 @@
       if (!items.length) {
         const empty = document.createElement('div');
         empty.className = 'empty';
-        empty.textContent = 'No scans yet. Run the extension or testing kit to populate this table.';
+        empty.textContent = 'No scans yet. Open a link through Ni Scam Ke? to populate this table.';
         mount.appendChild(empty);
         return;
       }
@@ -437,10 +438,10 @@
         setText('approvedFp', summary.approvedFalsePositives ?? 0);
         setText('rejectedFp', summary.rejectedFalsePositives ?? 0);
         setText('updatedAt', new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-        setText('healthLine', 'Live backend connected. Dashboard refreshes every 5 seconds.');
+        setText('healthLine', 'Protection service connected. Dashboard refreshes every 5 seconds.');
         renderRecentDecisions(recent);
       } catch (error) {
-        setText('healthLine', 'Dashboard cannot reach the backend yet. Start Spring Boot on localhost:8080.');
+        setText('healthLine', 'Dashboard cannot reach the protection service yet.');
         renderRecentDecisions([]);
       }
     }
