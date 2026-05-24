@@ -26,7 +26,6 @@ function formatPercent(value) {
     return `${Math.round(numeric * 100)}%`;
 }
 
-<<<<<<< Updated upstream
 async function readErrorMessage(response) {
     try {
         const data = await response.json();
@@ -34,7 +33,8 @@ async function readErrorMessage(response) {
     } catch (error) {
         return `Request failed with status ${response.status}.`;
     }
-=======
+}
+
 function formatEvidenceSources(evidenceSources) {
     const sourceLabels = {
         AI_MODEL: "Gemini AI",
@@ -63,7 +63,6 @@ function formatEvidenceSources(evidenceSources) {
         .filter(Boolean)
         .map(source => sourceLabels[source] || source)
         .join(", ");
->>>>>>> Stashed changes
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -94,7 +93,7 @@ document.addEventListener("DOMContentLoaded", () => {
     riskScoreEl.textContent = `${safeRiskScore}/100`;
     confidenceEl.textContent = formatPercent(confidence);
     riskFillEl.style.width = `${safeRiskScore}%`;
-    sourceLineEl.textContent = `Evidence source: ${evidenceSources}`;
+    sourceLineEl.textContent = `Evidence source: ${formatEvidenceSources(evidenceSources)}`;
 
     const riskLabel = safeRiskScore >= 80 ? "High Risk" : safeRiskScore >= 50 ? "Medium Risk" : "Low Risk";
     riskPillEl.textContent = riskLabel;
