@@ -81,7 +81,7 @@ public class UrlFeatureExtractorService {
 
         boolean highRiskTld = threatIntelligenceService.highRiskTlds().stream().anyMatch(domain::endsWith);
         if (highRiskTld) {
-            addRisk(breakdown, indicators, "highRiskTld", 15, "High-risk or demo phishing TLD detected.");
+            addRisk(breakdown, indicators, "highRiskTld", 15, "High-risk phishing TLD detected.");
         }
 
         boolean bankKeyword = threatIntelligenceService.containsAny(threatIntelligenceService.bankBrandTerms(), fullText);

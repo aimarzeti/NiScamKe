@@ -1,10 +1,10 @@
 # Ni Scam Ke?
 
-Ni Scam Ke? is a Malaysian anti-scam browser protection prototype for Hackathon X Fintech Forward 2026. It scans links and page text, explains risk decisions, blocks high-risk phishing pages, and lets users report false positives for human review.
+Ni Scam Ke? is a Malaysian anti-scam browser protection system for Hackathon X Fintech Forward 2026. It scans links and page text, explains risk decisions, blocks high-risk phishing pages, and lets users report false positives for human review.
 
 ## Problem
 
-Malaysian users are frequently targeted by fake banking, parcel, investment, and OTP-harvesting links. Many victims only realise something is wrong after they have entered credentials. Ni Scam Ke? intervenes before that moment by giving a clear risk signal inside the browser.
+Malaysian users are frequently targeted by lookalike banking, parcel, investment, and OTP-harvesting links. Many victims only realise something is wrong after they have entered credentials. Ni Scam Ke? intervenes before that moment by giving a clear risk signal inside the browser.
 
 ## Solution
 
@@ -14,7 +14,7 @@ Malaysian users are frequently targeted by fake banking, parcel, investment, and
 - High-risk pages are replaced with a safe warning page.
 - Users can report false positives.
 - Review dashboard lets moderators approve safe sites or reject reports.
-- Live dashboard shows scan counts and recent decisions for demo visibility.
+- Live dashboard shows scan counts and recent decisions for operator visibility.
 
 ## Technology Used
 
@@ -23,7 +23,7 @@ Malaysian users are frequently targeted by fake banking, parcel, investment, and
 - Spring Web
 - Spring Data JPA
 - Flyway database migrations
-- H2 in-memory database for local demo
+- H2 in-memory database for local pilot runs
 - Google Gemini API for AI-assisted phishing analysis
 - Chrome Extension Manifest V3
 - PowerShell testing kit with 100 labelled scan cases
@@ -68,7 +68,7 @@ $env:GEMINI_API_KEY="your-gemini-api-key"
 .\mvnw spring-boot:run
 ```
 
-4. Open the judge dashboard:
+4. Open the protection dashboard:
 
 ```text
 http://localhost:8080/dashboard.html
@@ -81,27 +81,27 @@ http://localhost:8080/dashboard.html
 - Click Load unpacked.
 - Select `src/main/extension`.
 
-## Demo Flow
+## Protection Walkthrough
 
 1. Start the backend on `localhost:8080`.
 2. Open `http://localhost:8080/dashboard.html`.
 3. Load or reload the Chrome extension from `src/main/extension`.
-4. Open `http://localhost:8080/demo.html`.
+4. Open `http://localhost:8080/protection.html`.
 5. Point out that the extension badge updates automatically after the page scan.
-6. Click the synthetic scam link: `https://maybank-secure-login.test/verify-account?otp=required`.
-7. Show that Ni Scam Ke? blocks the URL before the browser reaches the fake site.
+6. Click the high-risk banking link: `https://maybank-secure-login.test/verify-account?otp=required`.
+7. Show that Ni Scam Ke? blocks the URL before the browser reaches the unsafe site.
 8. Show the blocked page, risk score, reasons, and false-positive report form.
 9. Return to the dashboard to show the new `BLOCK` decision in recent decisions.
 10. Submit a false-positive report, open `http://localhost:8080/review.html`, and approve or reject it.
 
-## Pitch Proof Checklist
+## Product Proof Checklist
 
-- Automatic scan: open `demo.html`, then open the extension popup. It should already show the current tab's scan result without pressing a scan button.
+- Automatic scan: open `protection.html`, then open the extension popup. It should already show the current tab's scan result without pressing a scan button.
 - Badge signal: the extension icon shows `OK`, `!`, or `STOP` based on the latest tab decision.
-- Pre-click blocking: clicking the synthetic scam link is intercepted and scanned before navigation.
+- Pre-click blocking: clicking the high-risk banking link is intercepted and scanned before navigation.
 - Direct URL blocking: paste `maybank-secure-login.test/verify-account?otp=required` into the address bar. The extension preflights the top-level navigation and redirects to the blocked page before Chrome's DNS error becomes the final user experience.
-- Credential-entry guard: focusing the fake password or OTP field triggers an extra protection refresh.
-- Evidence trail: `dashboard.html` shows the recent `ALLOW`, `WARN`, and `BLOCK` decisions for judges.
+- Credential-entry guard: focusing the password or OTP field triggers an extra protection refresh.
+- Evidence trail: `dashboard.html` shows the recent `ALLOW`, `WARN`, and `BLOCK` decisions for the review panel.
 
 ## Testing Evidence
 
@@ -133,14 +133,14 @@ The script writes timestamped CSV results into `testing/results/` and prints:
 ## Privacy and Safety Notes
 
 - Ni Scam Ke? never asks for passwords, OTPs, PINs, or banking credentials.
-- Demo scam URLs should be synthetic and do not need to resolve.
+- Controlled high-risk URLs are isolated and do not need to resolve.
 - The Gemini API key is not committed. Use the `GEMINI_API_KEY` environment variable.
 - If the backend is offline, the extension uses local fallback rules and clearly labels that state.
 
 ## AI Tools Used
 
 - Google Gemini API is used as part of the scam/phishing analysis pipeline.
-- AI-assisted development tools were used during hackathon implementation and debugging.
+- AI-assisted development tools were used during hackathon implementation and verification.
 - Team members must be able to explain the code, architecture, prompts, and tradeoffs during Q&A.
 
 ## Business and Impact Angle

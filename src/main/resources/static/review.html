@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NiScamKe False Positive Review</title>
+  <title>NiScamKe Trust Review</title>
   <style>
     :root {
       --bg: #fff8ef;
@@ -184,14 +184,14 @@
   <main class="wrap">
     <section class="hero">
       <p class="eyebrow">Human-in-the-loop safety</p>
-      <h1>False Positive Review</h1>
+      <h1>Trust Review Queue</h1>
       <p class="muted">
         Approve a report when the blocked site is legitimate. Reject it when protection should stay active.
-        This gives the product a realistic trust-and-safety loop instead of a black-box AI decision.
+        Reviewer decisions keep the protection layer accountable and reduce unnecessary friction.
       </p>
       <div class="actions">
         <a class="btn" href="/dashboard.html">Back to Dashboard</a>
-        <a class="btn" href="/api/v1/false-positive?status=PENDING_REVIEW">Raw Pending JSON</a>
+        <a class="btn" href="/api/v1/false-positive?status=PENDING_REVIEW">Pending Queue</a>
       </div>
       <div class="status" id="statusLine"></div>
     </section>
@@ -277,7 +277,7 @@
         if (!data.length) {
           const empty = document.createElement('div');
           empty.className = 'empty';
-          empty.textContent = 'No pending false-positive reports. The trust queue is clear.';
+          empty.textContent = 'No pending review requests. The trust queue is clear.';
           list.appendChild(empty);
           return;
         }
@@ -286,7 +286,7 @@
       } catch (error) {
         const empty = document.createElement('div');
         empty.className = 'empty';
-        empty.textContent = 'Could not load review queue. Start the backend on localhost:8080 and refresh.';
+        empty.textContent = 'Could not load review queue. Check that the protection service is running and refresh.';
         list.appendChild(empty);
       }
     }

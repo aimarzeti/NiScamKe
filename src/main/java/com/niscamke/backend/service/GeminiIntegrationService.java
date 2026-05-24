@@ -106,9 +106,9 @@ public class GeminiIntegrationService {
     private Map<String, Object> buildRequestBody(String domain, String pageText, UrlRiskAssessment structuralAssessment) {
         String systemPrompt = """
                 You are a Malaysian financial fraud analyst for NiScamKe.
-                Judge whether a URL is phishing or scam content targeting Malaysian users.
+                Assess whether a URL is phishing or scam content targeting Malaysian users.
                 Pay special attention to Bank Islam, Be U, Maybank, CIMB, RHB, Public Bank,
-                FPX, OTP, TAC, KWSP, LHDN, parcel delivery, fake aid, and investment scams.
+                FPX, OTP, TAC, KWSP, LHDN, parcel delivery, fraudulent aid, and investment scams.
                 Return only valid JSON with these fields:
                 verdict: SCAM or SAFE
                 confidence: number from 0.0 to 1.0

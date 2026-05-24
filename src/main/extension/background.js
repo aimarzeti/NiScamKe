@@ -1,6 +1,6 @@
 /**
  * Ni Scam Ke? - Background Service Worker
- * Uses the live backend first, then falls back to local rules so the demo never feels broken.
+ * Uses the live backend first, then falls back to local rules when the service is unavailable.
  */
 
 const API_BASE_URL = "http://localhost:8080";
@@ -576,7 +576,7 @@ function evaluateWithLocalRules(incomingMessage) {
             riskScore: 88,
             confidence: 0.86,
             reasons: [
-                "This looks like a fake aid or free-device application scam.",
+                "This looks like an aid or free-device application scam.",
                 "The URL combines reward bait with suspicious application-style routing."
             ],
             evidenceSources: "LOCAL_APPLICATION_SCAM_RULES"

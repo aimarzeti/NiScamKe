@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NiScamKe Pitch Demo</title>
+  <title>NiScamKe Protection Check</title>
   <style>
     :root {
       --ink: #10243e;
@@ -145,43 +145,43 @@
   <main>
     <section class="shell">
       <div class="hero">
-        <p class="eyebrow">Controlled pitch demo</p>
-        <h1>Show automatic protection without real scam links.</h1>
+        <p class="eyebrow">Protected browsing check</p>
+        <h1>Ni Scam Ke? checks risky links before users enter sensitive details.</h1>
         <p class="lede">
-          Load this page with the Chrome extension enabled. The extension checks the tab automatically,
-          updates its badge, scans links before navigation, and blocks the synthetic high-risk URL.
+          The browser protection layer checks the current page, updates the safety badge,
+          scans links before navigation, and stops high-risk flows before credential entry.
         </p>
       </div>
 
       <div class="grid">
         <section class="card">
-          <h2>Safe reference link</h2>
-          <p>This points to an official Malaysian banking domain. It should be allowed by the trusted-domain logic.</p>
+          <h2>Verified banking link</h2>
+          <p>Official Malaysian banking domains are recognised and allowed with a low-risk decision.</p>
           <a class="safe-link" href="https://www.maybank2u.com.my/">Open official Maybank2u</a>
         </section>
 
         <section class="card">
-          <h2>Synthetic scam link</h2>
-          <p>This URL is fake and does not need to resolve. Ni Scam Ke? should scan it before navigation and block it.</p>
-          <a class="danger-link" href="https://maybank-secure-login.test/verify-account?otp=required">Open simulated banking scam</a>
+          <h2>High-risk banking link</h2>
+          <p>Lookalike banking links are checked before navigation and stopped when risk signals are strong.</p>
+          <a class="danger-link" href="https://maybank-secure-login.test/verify-account?otp=required">Open high-risk banking link</a>
         </section>
 
         <section class="card">
           <h2>Credential-entry guard</h2>
-          <p>Clicking the fields below triggers the sensitive-entry guard on an untrusted demo page.</p>
+          <p>Sensitive fields trigger an extra protection check before passwords, OTPs, or TAC codes are entered.</p>
           <form action="#" method="post">
-            <label for="demoPassword">Bank password</label>
-            <input id="demoPassword" name="bankPassword" type="password" autocomplete="current-password">
+            <label for="guardPassword">Bank password</label>
+            <input id="guardPassword" name="bankPassword" type="password" autocomplete="current-password">
 
-            <label for="demoOtp">OTP / TAC code</label>
-            <input id="demoOtp" name="otpTacCode" type="text" inputmode="numeric" placeholder="6-digit OTP">
+            <label for="guardOtp">OTP / TAC code</label>
+            <input id="guardOtp" name="otpTacCode" type="text" inputmode="numeric" placeholder="6-digit OTP">
           </form>
         </section>
 
         <section class="card">
-          <h2>Dashboard proof</h2>
-          <p>Keep the dashboard open beside this page. Every automatic scan and blocked decision appears in recent decisions.</p>
-          <a class="safe-link" href="/dashboard.html">Open dashboard</a>
+          <h2>Command center</h2>
+          <p>Every scan decision is logged with risk score, reason, and evidence source for review.</p>
+          <a class="safe-link" href="/dashboard.html">Open command center</a>
         </section>
       </div>
     </section>
