@@ -457,7 +457,7 @@ public class VerificationService {
         return switch (normalized) {
             case "BANKING_PHISHING", "INVESTMENT_SCAM", "GOVERNMENT_IMPERSONATION",
                     "PARCEL_SCAM", "CREDENTIAL_HARVESTING", "SAFE", "COMMUNITY_REPORTED",
-                    "AI_DETECTED" -> normalized;
+                    "AI_DETECTED", "AID_OR_REWARD_SCAM" -> normalized;
             default -> "UNKNOWN";
         };
     }

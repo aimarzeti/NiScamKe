@@ -7,9 +7,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.regex.Pattern;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -17,50 +17,16 @@ public class UrlFeatureExtractorService {
 
     private static final Pattern IPV4_HOST = Pattern.compile("\\d{1,3}(\\.\\d{1,3}){3}");
 
-    private static final Set<String> TRUSTED_DOMAINS = Set.of(
-            "bankislam.com.my", "bimb.com.my", "beubankislam.com.my",
-            "maybank2u.com.my", "maybank.com.my", "maybank.com",
-            "cimbclicks.com.my", "cimb.com.my",
-            "rhbbank.com.my", "pbebank.com", "publicbank.com.my",
-            "hongleongbank.com.my", "ambank.com.my", "affinalways.com",
-            "mybsn.com.my", "agrobank.com.my", "bnm.gov.my");
+    private final ThreatIntelligenceService threatIntelligenceService;
 
-    private static final Set<String> SHORTENER_DOMAINS = Set.of(
-            "bit.ly", "tinyurl.com", "t.co", "goo.gl", "is.gd", "cutt.ly",
-            "rebrand.ly", "s.id", "shorturl.at");
+    public UrlFeatureExtractorService() {
+        this(new ThreatIntelligenceService());
+    }
 
-    private static final List<String> HIGH_RISK_TLDS = List.of(
-            ".click", ".online", ".site", ".top", ".xyz", ".icu", ".test", ".live");
-
-    private static final List<String> BANK_KEYWORDS = List.of(
-            "maybank", "maybank2u", "cimb", "cimbclicks", "bankislam", "bimb",
-            "rhb", "publicbank", "pbebank", "hongleong", "ambank", "affin",
-            "bsn", "mybsn", "agrobank", "agro");
-
-    private static final List<String> SUSPICIOUS_DOMAIN_TOKENS = List.of(
-            "secure", "login", "verify", "verification", "update", "account",
-            "suspended", "alert", "tac", "otp", "reset", "confirm", "security",
-            "check", "helpdesk", "hold");
-
-    private static final List<String> CREDENTIAL_KEYWORDS = List.of(
-            "otp", "tac", "fpx", "password", "kata laluan", "pin", "login",
-            "log masuk", "verify", "verification", "account suspended",
-            "akaun digantung", "security check", "sms code", "card details",
-            "banking details", "card information", "card pin", "phone verification",
-            "identity card", "private banking details", "customer password",
-            "one-time password");
-
-    private static final List<String> MALAYSIAN_GOVERNMENT_KEYWORDS = List.of(
-            "kwsp", "epf", "lhdn", "hasil", "mytax", "bpn", "str", "sumbangan",
-            "mykad", "jpn", "mysejahtera", "jpj");
-
-    private static final List<String> PARCEL_KEYWORDS = List.of(
-            "poslaju", "gdex", "jnt", "j&t", "ninjavan", "parcel", "delivery",
-            "customs", "kastam");
-
-    private static final List<String> INVESTMENT_KEYWORDS = List.of(
-            "pelaburan", "investment", "roi", "crypto", "forex", "dividend",
-            "guaranteed profit", "pulangan");
+    @Autowired
+    public UrlFeatureExtractorService(ThreatIntelligenceService threatIntelligenceService) {
+        this.threatIntelligenceService = threatIntelligenceService;
+    }
 
     public UrlRiskAssessment assess(String url, String pageText) {
         String normalizedUrl = normalizeUrl(url);
@@ -76,7 +42,7 @@ public class UrlFeatureExtractorService {
             return new UrlRiskAssessment(normalizedUrl, "", 50, "UNKNOWN", indicators, breakdown);
         }
 
-        if (isTrustedDomain(domain)) {
+        if (threatIntelligenceService.isTrustedDomain(domain)) {
             addRisk(breakdown, indicators, "trustedDomain", 0, "Recognised official Malaysian bank, government, or education domain.");
             return new UrlRiskAssessment(normalizedUrl, domain, 0, "SAFE", indicators, breakdown);
         }
@@ -109,26 +75,26 @@ public class UrlFeatureExtractorService {
             addRisk(breakdown, indicators, "ipAddressHost", 25, "Uses an IP address instead of a normal domain.");
         }
 
-        if (SHORTENER_DOMAINS.contains(domain)) {
+        if (threatIntelligenceService.shortenerDomains().contains(domain)) {
             addRisk(breakdown, indicators, "urlShortener", 20, "URL shortener hides the final destination.");
         }
 
-        boolean highRiskTld = HIGH_RISK_TLDS.stream().anyMatch(domain::endsWith);
+        boolean highRiskTld = threatIntelligenceService.highRiskTlds().stream().anyMatch(domain::endsWith);
         if (highRiskTld) {
             addRisk(breakdown, indicators, "highRiskTld", 15, "High-risk or demo phishing TLD detected.");
         }
 
-        boolean bankKeyword = BANK_KEYWORDS.stream().anyMatch(fullText::contains);
+        boolean bankKeyword = threatIntelligenceService.containsAny(threatIntelligenceService.bankBrandTerms(), fullText);
         if (bankKeyword && !domain.endsWith(".com.my") && !domain.endsWith(".com")) {
             addRisk(breakdown, indicators, "bankKeywordWithoutOfficialDomain", 30, "Malaysian bank keyword appears outside an official banking domain.");
         }
 
-        boolean suspiciousDomainToken = SUSPICIOUS_DOMAIN_TOKENS.stream().anyMatch(domain::contains);
+        boolean suspiciousDomainToken = threatIntelligenceService.containsAny(threatIntelligenceService.suspiciousActionTerms(), domain);
         if (suspiciousDomainToken) {
             addRisk(breakdown, indicators, "suspiciousDomainToken", 10, "Domain uses phishing-style action words such as verify, update, TAC, OTP, or account alert.");
         }
 
-        boolean credentialKeyword = CREDENTIAL_KEYWORDS.stream().anyMatch(fullText::contains);
+        boolean credentialKeyword = threatIntelligenceService.containsAny(threatIntelligenceService.sensitiveCredentialTerms(), fullText);
         if (credentialKeyword) {
             addRisk(breakdown, indicators, "credentialKeywords", 25, "Requests login, OTP, TAC, FPX, password, or card details.");
         }
@@ -149,17 +115,25 @@ public class UrlFeatureExtractorService {
             addRisk(breakdown, indicators, "nonStandardPort", 10, "Uses a non-standard web port.");
         }
 
-        boolean governmentKeyword = MALAYSIAN_GOVERNMENT_KEYWORDS.stream().anyMatch(fullText::contains);
+        boolean governmentKeyword = threatIntelligenceService.containsAny(threatIntelligenceService.malaysianGovernmentTerms(), fullText);
         if (governmentKeyword && credentialKeyword && !domain.endsWith(".gov.my")) {
             addRisk(breakdown, indicators, "malaysianGovernmentPattern", 18, "Malaysian government or aid keyword paired with sensitive-data collection.");
         } else if (governmentKeyword && !domain.endsWith(".gov.my")) {
             addRisk(breakdown, indicators, "malaysianGovernmentPattern", 10, "Malaysian government or aid keyword appears outside a government domain.");
         }
 
+        long applicationBaitMatches = threatIntelligenceService.countMatches(threatIntelligenceService.aidRewardBaitTerms(), fullText);
+        boolean suspiciousApplicationRoute = threatIntelligenceService.containsAny(threatIntelligenceService.applicationRouteTerms(), fullText);
+        if (applicationBaitMatches >= 2 && suspiciousApplicationRoute) {
+            addRisk(breakdown, indicators, "aidOrRewardApplicationScam", 72, "Free aid or device bait appears with suspicious application-style routing.");
+        } else if (applicationBaitMatches >= 2) {
+            addRisk(breakdown, indicators, "aidOrRewardBait", 30, "Free aid, reward, or device bait detected.");
+        }
+
         int score = breakdown.values().stream().mapToInt(Integer::intValue).sum();
         score = Math.min(100, Math.max(0, score));
 
-        String threatType = classifyThreatType(score, bankKeyword, governmentKeyword, fullText, credentialKeyword);
+        String threatType = classifyThreatType(score, bankKeyword, governmentKeyword, fullText, credentialKeyword, applicationBaitMatches);
         if (indicators.isEmpty()) {
             indicators.add("No strong phishing indicators detected by structural analysis.");
         }
@@ -171,20 +145,23 @@ public class UrlFeatureExtractorService {
         return parseUrl(normalizeUrl(url)).domain();
     }
 
-    private String classifyThreatType(int score, boolean bankKeyword, boolean governmentKeyword, String fullText, boolean credentialKeyword) {
+    private String classifyThreatType(int score, boolean bankKeyword, boolean governmentKeyword, String fullText, boolean credentialKeyword, long applicationBaitMatches) {
         if (score < 15) {
             return "SAFE";
         }
         if (bankKeyword) {
             return "BANKING_PHISHING";
         }
+        if (applicationBaitMatches >= 2) {
+            return "AID_OR_REWARD_SCAM";
+        }
         if (governmentKeyword) {
             return "GOVERNMENT_IMPERSONATION";
         }
-        if (PARCEL_KEYWORDS.stream().anyMatch(fullText::contains)) {
+        if (threatIntelligenceService.containsAny(threatIntelligenceService.parcelTerms(), fullText)) {
             return "PARCEL_SCAM";
         }
-        if (INVESTMENT_KEYWORDS.stream().anyMatch(fullText::contains)) {
+        if (threatIntelligenceService.containsAny(threatIntelligenceService.investmentTerms(), fullText)) {
             return "INVESTMENT_SCAM";
         }
         if (credentialKeyword) {
@@ -230,13 +207,6 @@ public class UrlFeatureExtractorService {
         return trimmed;
     }
 
-    private boolean isTrustedDomain(String domain) {
-        return TRUSTED_DOMAINS.stream()
-                .anyMatch(trustedDomain -> domain.equals(trustedDomain) || domain.endsWith("." + trustedDomain))
-                || domain.endsWith(".gov.my")
-                || domain.endsWith(".edu.my");
-    }
-
     private boolean hasLookalikeBankTerm(String domain) {
         String simplifiedDomain = domain
                 .replace('0', 'o')
@@ -246,7 +216,7 @@ public class UrlFeatureExtractorService {
                 .replace('5', 's')
                 .replaceAll("[^a-z0-9]", "");
 
-        for (String bankKeyword : BANK_KEYWORDS) {
+        for (String bankKeyword : threatIntelligenceService.bankBrandTerms()) {
             String simplifiedKeyword = bankKeyword.replaceAll("[^a-z0-9]", "");
             if (simplifiedKeyword.length() <= 4) {
                 continue;

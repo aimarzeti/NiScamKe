@@ -92,6 +92,18 @@ const APPLICATION_SCAM_BAIT_TERMS = [
     "hadiah"
 ];
 
+const SUSPICIOUS_APPLICATION_HOST_TERMS = [
+    "apy",
+    "ap1",
+    "app1y",
+    "aplly",
+    "aply",
+    "apply",
+    "mohon",
+    "daftar",
+    "claim"
+];
+
 const PERSONAL_CONTACT_TERMS = [
     "nama penuh",
     "nombor telegram",
@@ -523,16 +535,23 @@ function evaluateWithLocalRules(incomingMessage) {
     const hasApplicationScamBait = APPLICATION_SCAM_BAIT_TERMS.some(term =>
         normalizedUrl.includes(term) || pageText.includes(term)
     );
+    const applicationBaitMatches = APPLICATION_SCAM_BAIT_TERMS.filter(term =>
+        normalizedUrl.includes(term) || pageText.includes(term)
+    );
+    const hasSuspiciousApplicationHost = SUSPICIOUS_APPLICATION_HOST_TERMS.some(term => normalizedUrl.includes(term));
     const collectsPersonalContact = PERSONAL_CONTACT_TERMS.some(term => pageText.includes(term));
+    const highConfidenceBankMimic = targetsBank &&
+        !establishedMalaysianTld &&
+        (matchedPattern || highRiskTld || asksForSensitiveInfo);
 
-    if (targetsBank && matchedPattern) {
+    if (highConfidenceBankMimic) {
         return normalizeVerdictPayload({
             status: "BLOCK",
             riskScore: 96,
             confidence: 0.94,
             reasons: [
-                "This looks like a Malaysian banking lookalike domain.",
-                `Matched suspicious token: ${matchedPattern}`
+                "This looks like a Malaysian banking lookalike domain on an untrusted address.",
+                matchedPattern ? `Matched suspicious token: ${matchedPattern}` : "Banking wording appears with high-risk URL or credential signals."
             ],
             evidenceSources: "LOCAL_BANK_MIMIC_RULES"
         }, targetUrl, { scanMode: "LOCAL_RULES", backendAvailable: false });
@@ -546,6 +565,19 @@ function evaluateWithLocalRules(incomingMessage) {
             reasons: [
                 "This looks like a free-aid or free-device application scam.",
                 "The page combines typo-filled application text with Telegram or personal-detail collection."
+            ],
+            evidenceSources: "LOCAL_APPLICATION_SCAM_RULES"
+        }, targetUrl, { scanMode: "LOCAL_RULES", backendAvailable: false });
+    }
+
+    if (applicationBaitMatches.length >= 2 && hasSuspiciousApplicationHost) {
+        return normalizeVerdictPayload({
+            status: "BLOCK",
+            riskScore: 88,
+            confidence: 0.86,
+            reasons: [
+                "This looks like a fake aid or free-device application scam.",
+                "The URL combines reward bait with suspicious application-style routing."
             ],
             evidenceSources: "LOCAL_APPLICATION_SCAM_RULES"
         }, targetUrl, { scanMode: "LOCAL_RULES", backendAvailable: false });
@@ -607,13 +639,23 @@ function evaluateWithLocalRules(incomingMessage) {
         }, targetUrl, { scanMode: "LOCAL_RULES", backendAvailable: false });
     }
 
-    if (targetsBank || (matchedPattern && highRiskTld)) {
+    if (matchedPattern && highRiskTld) {
         return normalizeVerdictPayload({
             status: "BLOCK",
             riskScore: 88,
             confidence: 0.88,
-            reasons: ["Banking keywords or login language appear on an untrusted domain."],
+            reasons: ["Login or verification language appears on a high-risk domain."],
             evidenceSources: "LOCAL_RISK_RULES"
+        }, targetUrl, { scanMode: "LOCAL_RULES", backendAvailable: false });
+    }
+
+    if (targetsBank) {
+        return normalizeVerdictPayload({
+            status: "WARN",
+            riskScore: 58,
+            confidence: 0.72,
+            reasons: ["This appears bank-related but is not in the trusted list yet. Verify before entering sensitive details."],
+            evidenceSources: "LOCAL_REVIEW_REQUIRED"
         }, targetUrl, { scanMode: "LOCAL_RULES", backendAvailable: false });
     }
 
